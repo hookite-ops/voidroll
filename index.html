@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#07061a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>VOIDROLL : RENEWAL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.38' cy='.32'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.4' stop-color='%23a78bff'/%3E%3Cstop offset='1' stop-color='%23150a3a'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='26' fill='url(%23g)'/%3E%3Cellipse cx='32' cy='32' rx='31' ry='9' fill='none' stroke='%23ff6ad8' stroke-width='3' transform='rotate(-18 32 32)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<header id="top">
+  <div class="biome" id="biomeChip"><i></i><b id="biomeName">평온</b><span id="biomeTime">0:00</span></div>
+  <div class="stats">
+    <div><small>행운</small><b id="luckVal">×1.00</b></div>
+    <div><small>속도</small><b id="spdVal">×1.00</b></div>
+    <div><small>굴림</small><b id="rollVal">0</b></div>
+  </div>
+</header>
+<div id="buffs"></div>
+<div id="banner"></div>
+
+<div id="result">
+  <div id="rName">VOIDROLL</div>
+  <div id="rEn">R E N E W A L</div>
+  <div id="rMeta"></div>
+</div>
+<div id="floats"></div>
+
+<div id="controls">
+  <div id="tenth"></div>
+  <div class="ctlrow">
+    <button id="autoBtn" class="pill">자동</button>
+    <button id="rollBtn">ROLL<span class="bar" id="rollBar"></span></button>
+    <button id="quickBtn" class="pill">빠름</button>
+  </div>
+</div>
+
+<nav id="nav">
+  <button data-p="map" data-i="map"><span>지도</span></button>
+  <button data-p="index" data-i="book"><span>도감</span></button>
+  <button data-p="bag" data-i="bag"><span>가방</span></button>
+  <button data-p="quest" data-i="quest"><span>퀘스트</span><i class="dotn" id="qdot"></i></button>
+  <button data-p="set" data-i="gear"><span>설정</span></button>
+</nav>
+
+<div id="sheet" class="hide">
+  <div class="sbox">
+    <div class="shead">
+      <button class="xbtn" id="shBack" aria-label="뒤로">‹</button>
+      <h2 id="shTitle"></h2>
+      <button class="xbtn" id="shClose" aria-label="닫기">✕</button>
+    </div>
+    <div class="sbody" id="shBody"></div>
+  </div>
+</div>
+
+<canvas id="cut" class="hide"></canvas>
+<div id="toasts"></div>
+
+<div id="intro">
+  <div class="iorb"><i></i><b></b></div>
+  <h1>VOIDROLL</h1>
+  <p class="sub2">R E N E W A L</p>
+  <p class="tap">화면을 눌러 시작</p>
+  <p class="foot">소리가 함께 나와요 · 설정에서 끌 수 있어요</p>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
