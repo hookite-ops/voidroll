@@ -79,7 +79,7 @@ const AURAS = [
   { id: 'aurora',   n: '오로라',   en: 'Aurora',   r: 180000, c: '#6affc0', c2: '#a06aff', fx: 'aurora',  boost: { b: 'snowy', x: 3 }, d: '극지의 하늘이 추는 춤.' },
   { id: 'crystalline', n: '수정궁', en: 'Crystalline', r: 250000, c: '#eef9ff', c2: '#9ad8ff', fx: 'crystal', d: '빛이 영원히 갇혀 있는 궁전.' },
   { id: 'chaos',    n: '혼돈',     en: 'Chaos',    r: 400000, c: '#ff2a6d', c2: '#2affd0', fx: 'glitch',  boost: { b: 'glitch', x: 5 }, d: '질서가 만들어지기 전의 세계.' },
-  { id: 'startear', n: '별의 눈물', en: 'Startear', r: 600000, c: '#a8e0ff', c2: '#ffffff', fx: 'star',   boost: { b: 'starfall', x: 4 }, d: '별도 운다. 아주 가끔.' },
+  { id: 'startear', n: '유성의 눈물', en: 'Startear', r: 600000, c: '#a8e0ff', c2: '#ffffff', fx: 'star',   boost: { b: 'starfall', x: 4 }, d: '별도 운다. 아주 가끔.' },
   // ── 엑절티드
   { id: 'raijin',   n: '뇌신',     en: 'Raijin',   r: 1.2e6, c: '#c8a8ff', c2: '#ffffff', fx: 'bolt',    boost: { b: 'rainy', x: 2 }, d: '천둥의 북을 울리는 신.' },
   { id: 'eternity', n: '영원',     en: 'Eternity', r: 2e6,   c: '#ffffff', c2: '#ffd36a', fx: 'chrono',  d: '끝이 없는 시계의 바늘.' },
@@ -248,7 +248,7 @@ const CHARMS = {
   moonstone:{ n: '월장석',      c: '#dfe6ff', ic: 'moon',   d: '밤에 행운 ×1.6',              night: 1.6,           cost: { starfrag: 8, '@moonlight': 1 } },
   sakura:   { n: '벚꽃 머리핀', c: '#ffb0d4', ic: 'petal',  d: '벚꽃비 행운 ×1.5 · 빛나는 확률 2배', bm: { b: 'sakura', x: 1.5 }, shiny: 2, cost: { blossom: 12, '@petal': 4 } },
   magnet:   { n: '재료 자석',   c: '#ff8a9a', ic: 'magnet', d: '재료 획득 확률 ×2',           mat: 2,               cost: { glim: 30, byte: 3 } },
-  hellhorn: { n: '악마의 뿔',   c: '#ff5a2a', ic: 'horn',   d: '지옥 행운 ×1.6 · 주화 +50%',  bm: { b: 'hell', x: 1.6 }, coin: .5, cost: { ember: 15, '@cinder': 8 } },
+  hellhorn: { n: '악마의 뿔',   c: '#ff5a2a', ic: 'horn',   d: '지옥 행운 ×1.6 · 샤드 +50%',  bm: { b: 'hell', x: 1.6 }, coin: .5, cost: { ember: 15, '@cinder': 8 } },
   voideye:  { n: '공허의 눈',   c: '#9a6cff', ic: 'eye',    d: '배수 보너스가 8번마다',       every: 8,             cost: { voiddust: 25, '@hollow': 1 } },
 };
 
@@ -292,14 +292,14 @@ QUESTS.push(
   { id: 'm1',    n: '첫 통달',       d: '등급 또는 날씨 하나 완성 (마스터리)', goal: S => [masteryList(S).filter(m => m.done).length, 1], rw: { coin: 1000 } },
 );
 
-NPCS.jorr = { n: '조르', role: '떠돌이 상인', lines: ['어서 오게! 이번엔 오래 못 있어. 골라, 골라!', '주화만 있으면 뭐든 팔지. 영혼은 빼고. 아마도.', '다음엔 어디로 갈지 나도 몰라. 바람이 정하지.'] };
+NPCS.jorr = { n: '조르', role: '떠돌이 상인', lines: ['어서 오게! 이번엔 오래 못 있어. 골라, 골라!', '샤드만 있으면 뭐든 팔지. 영혼은 빼고. 아마도.', '다음엔 어디로 갈지 나도 몰라. 바람이 정하지.'] };
 NPCS.lumen = { n: '루멘', role: '융합의 정령', lines: ['둘이 하나가 되면, 하나는 더 이상 혼자가 아니야.', '굴려서는 절대 나오지 않는 오라들이 있어. 여기서만.', '재료가 된 오라들은 사라지지 않아. 새 빛 안에 남지.'] };
 
 /* 마스터리: 등급(날씨 한정·융합·낮밤 제외) 또는 날씨 한정을 모두 모으면 영구 행운 +5% */
 function masteryList(S) {
   const out = [];
   for (let t = 0; t < TIERS.length; t++) {
-    const l = AURAS.filter(a => !a.biome && !a.fusion && !a.day && !a.night && tierOf(a.r) === t);
+    const l = AURAS.filter(a => !a.biome && !a.fusion && !a.day && !a.night && !a.summer && !a.summerRoll && !a.mg && tierOf(a.r) === t);
     if (l.length) out.push({ k: 't' + t, n: TIERS[t].n, c: TIERS[t].c, have: l.filter(a => S.found[a.id]).length, all: l.length });
   }
   for (const b in BIOMES) {

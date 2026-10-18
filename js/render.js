@@ -505,11 +505,12 @@ class BiomeFX {
     const nt = this.forceNight != null ? this.forceNight : typeof isNight === 'function' && isNight() ? 1 : 0; this.nk += (nt - this.nk) * Math.min(1, dt * .5);
     for (const c of this.clouds) { c.x += c.v * dt; if (c.x > 1.4) c.x = -.4; }
     const b = this.cur, sc = w / 400;
-    const rates = { sakura: 16 * sc, normal: 6, windy: 22, rainy: 140 * sc, snowy: 26 * sc, sand: 70 * sc, starfall: 1.2, hell: 26 * sc, glitch: 18, void: 34 };
+    const rates = { sakura: 16 * sc, normal: 6, windy: 22, rainy: 140 * sc, snowy: 26 * sc, sand: 70 * sc, starfall: 1.2, hell: 26 * sc, glitch: 18, void: 34, eclipse: 18 * sc, deep: 22 * sc, garden: 12 * sc, dusk: 9 * sc, beach: 14 * sc };
     this.acc += dt * (rates[b] || 0);
     while (this.acc >= 1) { this.acc--; if (this.P.length < 500) this.P.push(this.mk(b, w, h)); }
-    if (b === 'starfall') for (let i = 0; i < 2; i++) if (Math.random() < dt * 3) this.P.push({ k: 'tw', x: Math.random() * w, y: Math.random() * h * .6, l: 0, m: rnd(.4, 1), s: rnd(1, 2.5) });
+    if (b === 'starfall' || b === 'garden') for (let i = 0; i < 2; i++) if (Math.random() < dt * 3) this.P.push({ k: 'tw', x: Math.random() * w, y: Math.random() * h * .6, l: 0, m: rnd(.4, 1), s: rnd(1, 2.5) });
     if (b === 'windy' && Math.random() < dt * 2) this.P.push({ k: 'leaf', x: -20, y: rnd(h * .1, h * .8), vx: rnd(160, 300), vy: rnd(-30, 30), l: 0, m: 4, rot: 0, vr: rnd(-6, 6), s: rnd(3, 6) });
+    if (b === 'dusk' && Math.random() < dt * 1.4) this.P.push({ k: 'leaf', x: rnd(-20, w), y: -10, vx: rnd(10, 40), vy: rnd(40, 80), sway: rnd(20, 40), ph: rnd(0, TAU), l: 0, m: 20, rot: 0, vr: rnd(-3, 3), s: rnd(3, 5), c: pick(['#e0782a', '#c8502a', '#f0a040']) });
     for (let i = this.P.length - 1; i >= 0; i--) {
       const p = this.P[i]; p.l += dt;
       if (p.k === 'in') { const k = p.l / p.m; p.a += dt * (1 + k * 2.5); p.r = p.r0 * (1 - ease(k) * .95); p.x = w / 2 + Math.cos(p.a) * p.r; p.y = h * .4 + Math.sin(p.a) * p.r * .7; }
@@ -532,6 +533,11 @@ class BiomeFX {
       case 'sakura': return { k: 'petal', x: rnd(-40, w), y: -10, vx: rnd(20, 60), vy: rnd(30, 70), sway: rnd(20, 50), ph: rnd(0, TAU), l: 0, m: 30, rot: rnd(0, TAU), vr: rnd(-3, 3), s: rnd(3, 6), c: pick(['#ffc8e0', '#ffb0d4', '#ffffff', '#ff8ab8']), a: rnd(.6, 1) };
       case 'glitch': return { k: 'bit', x: rnd(0, w), y: -10, vx: 0, vy: rnd(40, 110), l: 0, m: 20, ch: pick(['0', '1', '#', '?', '/', '_']), c: pick(['#2affd0', '#ff2a6d', '#8fa0ff']), a: rnd(.3, .8), s: rnd(9, 14) };
       case 'void': return { k: 'in', a: rnd(0, TAU), r0: Math.max(w, h) * rnd(.55, .8), r: 0, x: 0, y: 0, l: 0, m: rnd(2.5, 4.5), s: rnd(.6, 1.8), c: pick(['#8a5cff', '#c8a8ff', '#ff5ad8', '#ffffff']), a: .9 };
+      case 'eclipse': return { k: 'ember', x: rnd(0, w), y: h + 10, vx: rnd(-10, 10), vy: -rnd(30, 80), sway: rnd(10, 30), ph: rnd(0, TAU), l: 0, m: rnd(4, 7), s: rnd(.8, 2), c: pick(['#c084fc', '#f0abfc', '#7c3aed', '#ffffff']), a: .8 };
+      case 'deep': return { k: 'bub', x: rnd(0, w), y: h + 10, vx: 0, vy: -rnd(40, 110), sway: rnd(8, 24), ph: rnd(0, TAU), l: 0, m: 20, s: rnd(1.5, 5), c: '#a7f3d0', a: rnd(.3, .7) };
+      case 'garden': return { k: 'petal', x: rnd(-40, w), y: -10, vx: rnd(10, 40), vy: rnd(20, 50), sway: rnd(20, 50), ph: rnd(0, TAU), l: 0, m: 30, rot: rnd(0, TAU), vr: rnd(-3, 3), s: rnd(2.5, 5), c: pick(['#ffe08a', '#ffb0e0', '#fff6d0', '#c8a8ff']), a: rnd(.6, 1) };
+      case 'dusk': return { k: 'fly', x: rnd(0, w), y: rnd(h * .35, h * .95), vx: rnd(-15, 15), vy: rnd(-12, 4), sway: rnd(10, 30), ph: rnd(0, TAU), l: 0, m: rnd(5, 9), s: rnd(1.2, 2.4), c: pick(['#e8ff8a', '#ffd36a']), a: 1 };
+      case 'beach': return { k: 'tw', x: rnd(0, w), y: rnd(h * .5, h * .64), l: 0, m: rnd(.4, 1.1), s: rnd(1, 2.4) };
       default: return { k: 'mote', x: rnd(0, w), y: h + 10, vx: rnd(-6, 6), vy: -rnd(10, 26), sway: rnd(4, 14), ph: rnd(0, TAU), l: 0, m: 40, s: rnd(.8, 2.2), c: pick(['#b9a8ff', '#8ad8ff', '#ffffff']), a: rnd(.3, .7) };
     }
   }
@@ -557,14 +563,23 @@ class BiomeFX {
     const starA = Math.min(1, (B.night ? 1 : 0) + nk * .9);
     if (starA > .02) { ctx.fillStyle = '#ffffff'; for (const s of this.stars) { ctx.globalAlpha = starA * (.35 + .35 * Math.sin(t * 1.5 + s.ph)); ctx.fillRect(s.x * w, s.y * h * .8, s.s, s.s); } }
     ctx.globalCompositeOperation = 'lighter';
-    const mx = w * .82, my = h * .2;
-    if (b === 'void') { for (let i = 0; i < 4; i++) { ctx.globalAlpha = 1; ctx.strokeStyle = rgba('#8a5cff', .12); ctx.lineWidth = 30 - i * 5; ctx.beginPath(); ctx.ellipse(w / 2, h * .38, w * (.3 + i * .14), w * (.12 + i * .06), t * .1 + i, 0, Math.PI * 1.3); ctx.stroke(); } }
+    const mx = w * .82, my = b === 'dusk' ? h * .44 : b === 'beach' ? h * .4 : h * .2;
+    if (b === 'eclipse') {
+      glow(ctx, '#c084fc', mx, my, w * .7, .45); glow(ctx, '#ffe0ff', mx, my, 70, .7);
+      ctx.globalAlpha = .55; ctx.strokeStyle = '#f5d0fe'; ctx.lineWidth = 1.5; ctx.beginPath();
+      for (let i = 0; i < 24; i++) { const an = i / 24 * TAU + t * .05, l = 30 + 16 * (.5 + .5 * Math.sin(t * 1.3 + i * 1.7)); ctx.moveTo(mx + Math.cos(an) * 25, my + Math.sin(an) * 25); ctx.lineTo(mx + Math.cos(an) * l, my + Math.sin(an) * l); }
+      ctx.stroke(); ctx.globalAlpha = 1; ctx.strokeStyle = '#fff6ff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(mx, my, 24, 0, TAU); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#07020f'; ctx.beginPath(); ctx.arc(mx, my, 22.5, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter';
+    } else if (b === 'deep') {
+      for (let i = 0; i < 6; i++) { const x = w * (.08 + i * .18) + Math.sin(t * .3 + i * 1.3) * 24, g = ctx.createLinearGradient(0, 0, 0, h * .75); g.addColorStop(0, 'rgba(160,255,220,.16)'); g.addColorStop(1, 'rgba(160,255,220,0)'); ctx.globalAlpha = .6 + .4 * Math.sin(t * .7 + i); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 14, 0); ctx.lineTo(x + 14, 0); ctx.lineTo(x + 70, h * .75); ctx.lineTo(x + 10, h * .75); ctx.closePath(); ctx.fill(); }
+      glow(ctx, '#34d399', w / 2, -h * .05, w * .8, .3);
+    } else if (b === 'void') { for (let i = 0; i < 4; i++) { ctx.globalAlpha = 1; ctx.strokeStyle = rgba('#8a5cff', .12); ctx.lineWidth = 30 - i * 5; ctx.beginPath(); ctx.ellipse(w / 2, h * .38, w * (.3 + i * .14), w * (.12 + i * .06), t * .1 + i, 0, Math.PI * 1.3); ctx.stroke(); } }
     else if (b === 'glitch') { glow(ctx, '#ff2a6d', w * .2, h * .2, w * .5, .25); glow(ctx, '#2affd0', w * .8, h * .35, w * .5, .2); }
     else {
       // 햇살 (낮)
       const day = 1 - nk;
       if (day > .05 && b !== 'rainy') {
-        glow(ctx, b === 'hell' ? '#ff7a30' : b === 'sand' ? '#ffd080' : '#fff4d0', mx, my, w * .55, .45 * day);
+        glow(ctx, b === 'hell' ? '#ff7a30' : b === 'sand' ? '#ffd080' : b === 'dusk' ? '#ff9a40' : b === 'beach' ? '#ffc890' : '#fff4d0', mx, my, w * (b === 'dusk' || b === 'beach' ? .8 : .55), .45 * day);
         const g = ctx.createRadialGradient(mx, my, 0, mx, my, h * .9); g.addColorStop(0, `rgba(255,248,220,${.16 * day})`); g.addColorStop(1, 'rgba(255,248,220,0)');
         ctx.fillStyle = g; ctx.globalAlpha = 1; ctx.beginPath();
         for (let i = 0; i < 7; i++) { const an = Math.PI * .55 + i * .16 + Math.sin(t * .15 + i) * .03, wd = .035 + (i % 3) * .015; ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(an - wd) * h, my + Math.sin(an - wd) * h); ctx.lineTo(mx + Math.cos(an + wd) * h, my + Math.sin(an + wd) * h); ctx.closePath(); }
@@ -574,13 +589,15 @@ class BiomeFX {
       if (nk > .05) { glow(ctx, '#dfe6ff', mx, my, 80, .35 * nk); ctx.globalAlpha = nk * .95; ctx.fillStyle = '#f0f4ff'; ctx.beginPath(); ctx.arc(mx, my, 16, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = nk * .95; ctx.fillStyle = sk[0]; ctx.beginPath(); ctx.arc(mx + 7, my - 4, 14, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter'; }
       if (b === 'hell') glow(ctx, '#ff3a10', w / 2, h * 1.05, w * .9, .5);
       if (b === 'sakura') glow(ctx, '#ffb0d4', w * .4, h * .3, w * .7, .25);
+      if (b === 'garden') { glow(ctx, '#ffb0e0', w * .25, h * .25, w * .6, .22); glow(ctx, '#ffe08a', w * .7, h * .38, w * .5, .2); }
+      if (b === 'dusk') glow(ctx, '#ff6a2a', w * .5, h * .55, w * .9, .25);
     }
     // 구름
     ctx.globalCompositeOperation = 'source-over';
     const cc = b === 'rainy' ? '#6a7a94' : b === 'hell' ? '#5a1a1a' : mix(sk[2], '#ffffff', .45);
     for (const c of this.clouds) {
       const cx = c.x * w, cy = c.y * h * .9, r = 46 * c.s * (w / 400);
-      ctx.globalAlpha = b === 'void' || b === 'glitch' ? .06 : (b === 'rainy' ? .5 : .32) * (1 - nk * .5);
+      ctx.globalAlpha = b === 'void' || b === 'glitch' || b === 'deep' || b === 'eclipse' ? .06 : (b === 'rainy' ? .5 : .32) * (1 - nk * .5);
       ctx.fillStyle = cc; ctx.beginPath();
       for (const [ox, oy, rr] of [[-1, .2, .55], [-.45, -.15, .7], [.2, -.3, .8], [.8, .05, .6], [0, .25, .7]]) { ctx.moveTo(cx + ox * r + rr * r, cy + oy * r); ctx.arc(cx + ox * r, cy + oy * r, rr * r, 0, TAU); }
       ctx.fill();
@@ -591,6 +608,13 @@ class BiomeFX {
     this.island(ctx, w * .13, h * .37, .55 * sc, isT, isS, rim, t);
     this.island(ctx, w * .88, h * .3, .42 * sc, isT, isS, rim, t + 2);
     this.island(ctx, w * .72, h * .5, .3 * sc, isT, isS, rim, t + 4);
+    if (b === 'beach') { // 바다
+      const sy = h * .5, g = ctx.createLinearGradient(0, sy, 0, h * .7); g.addColorStop(0, '#5ad0f0'); g.addColorStop(1, '#1a6aa8');
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(0, sy, w, h * .2);
+      ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 16; i++) { const yy = sy + 4 + (i * 13.7 % (h * .16)), xx = (i * 97 + t * (14 + i % 4 * 6)) % (w + 80) - 40, ln = 16 + i % 5 * 8; ctx.globalAlpha = .18 + .14 * Math.sin(t * 2 + i); ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + ln, yy); ctx.stroke(); }
+      glow(ctx, '#ffd88a', mx, sy + 6, w * .35, .35); ctx.globalCompositeOperation = 'source-over';
+    }
     // 언덕
     for (let i = 0; i < 2; i++) {
       ctx.globalAlpha = 1; ctx.fillStyle = mix(B.ground, sk[2], .6 - i * .25);
@@ -615,7 +639,9 @@ class BiomeFX {
           break;
         }
         case 'petal': ctx.globalCompositeOperation = 'source-over'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .55, 0, 0, TAU); ctx.fill(); ctx.restore(); break;
-        case 'leaf': ctx.globalCompositeOperation = 'source-over'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = '#7ad89a'; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .45, 0, 0, TAU); ctx.fill(); ctx.restore(); break;
+        case 'bub': ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = p.c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(p.x - p.s * .45, p.y - p.s * .5, p.s * .35, p.s * .35); break;
+        case 'fly': { ctx.globalCompositeOperation = 'lighter'; const bl = .25 + .75 * Math.max(0, Math.sin(t * 2.6 + p.ph)); glow(ctx, p.c, p.x, p.y, p.s * 7, al * bl); ctx.globalAlpha = al * bl; ctx.fillStyle = '#ffffe8'; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); break; }
+        case 'leaf': ctx.globalCompositeOperation = 'source-over'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c || '#7ad89a'; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .45, 0, 0, TAU); ctx.fill(); ctx.restore(); break;
         case 'tw': ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#fff6d0', p.x, p.y, p.s * 4, Math.sin(p.l / p.m * Math.PI)); break;
         case 'bit': ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = p.c; ctx.font = `${p.s}px monospace`; ctx.fillText(p.ch, p.x, p.y); break;
         case 'ember': case 'in': ctx.globalCompositeOperation = 'lighter'; glow(ctx, p.c, p.x, p.y, p.s * 4, al); ctx.fillStyle = p.c; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); break;
@@ -626,6 +652,9 @@ class BiomeFX {
     ctx.globalCompositeOperation = 'source-over';
     if (b === 'sand') { ctx.globalAlpha = .12 + .05 * Math.sin(t); ctx.fillStyle = '#d88a40'; ctx.fillRect(0, 0, w, h); }
     if (b === 'rainy') { ctx.globalAlpha = .12; ctx.fillStyle = '#000814'; ctx.fillRect(0, 0, w, h); }
+    if (b === 'deep') { ctx.globalAlpha = .16; ctx.fillStyle = '#00302a'; ctx.fillRect(0, 0, w, h); }
+    if (b === 'eclipse') { ctx.globalAlpha = .1; ctx.fillStyle = '#1a0630'; ctx.fillRect(0, 0, w, h); }
+    if (b === 'dusk') { ctx.globalAlpha = .07; ctx.fillStyle = '#ff7030'; ctx.fillRect(0, 0, w, h); }
     if (this.flash > 0) { ctx.globalAlpha = this.flash * .35; ctx.fillStyle = '#dfe8ff'; ctx.fillRect(0, 0, w, h); }
     if (b === 'glitch') {
       for (const g of this.glit) { ctx.globalAlpha = .55; ctx.fillStyle = g.c; ctx.fillRect(g.x - g.w / 2, g.y, g.w, g.h); }
@@ -706,6 +735,27 @@ function drawProp(ctx, x, y, s, kind, gc, t, nk) {
       const rr = (x0, y0, w0, h0) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w0, h0, w0 / 2) : ctx.rect(x0, y0, w0, h0); ctx.fill(); ctx.stroke(); };
       rr(-s * .17, -s * 1.6, s * .34, s * 1.6); rr(-s * .55, -s * 1.15, s * .24, s * .6); rr(s * .3, -s * 1.3, s * .24, s * .7);
       break;
+    }
+    case 'coral': {
+      const col = mix(gc, '#ff7aa8', .55); ctx.strokeStyle = col; ctx.lineCap = 'round';
+      const br = (x0, y0, an, len, wd, d) => { if (d > 3) return; const sw = Math.sin(t * 1.2 + d * .8) * .08, x1 = x0 + Math.cos(an + sw) * len, y1 = y0 + Math.sin(an + sw) * len; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); br(x1, y1, an - .5, len * .7, wd * .7, d + 1); br(x1, y1, an + .45, len * .66, wd * .7, d + 1); };
+      br(0, 0, -Math.PI / 2, s * .7, s * .2, 0);
+      ctx.strokeStyle = '#2f9a7a'; ctx.lineWidth = s * .07; ctx.beginPath(); ctx.moveTo(s * .55, 0); for (let i = 1; i <= 6; i++) ctx.lineTo(s * .55 + Math.sin(t * 1.6 + i) * s * .1, -i * s * .28); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#5ef0c8', 0, -s * .9, s * 1.4, .25 + .1 * Math.sin(t * 2)); break;
+    }
+    case 'flower': {
+      const sw = Math.sin(t * 1.4) * s * .08, fx = sw * 1.5, fy = -s * 1.2, pc = mix(gc, '#ffb0e0', .35);
+      ctx.strokeStyle = '#5a9a6a'; ctx.lineWidth = s * .08; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(sw, -s * .6, fx, fy); ctx.stroke();
+      ctx.fillStyle = '#5a9a6a'; ctx.beginPath(); ctx.ellipse(sw * .6 + s * .16, -s * .5, s * .16, s * .07, -.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = pc; for (let i = 0; i < 5; i++) { ctx.save(); ctx.translate(fx, fy); ctx.rotate(i * TAU / 5 + t * .3); ctx.beginPath(); ctx.ellipse(0, -s * .22, s * .12, s * .24, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(fx, fy, s * .1, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; glow(ctx, pc, fx, fy, s * 1.3, .35 + .15 * Math.sin(t * 2.5)); break;
+    }
+    case 'palm': {
+      ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = s * .16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * .3, -s, s * .15, -s * 1.9); ctx.stroke();
+      const tx = s * .15, ty = -s * 1.9, sw = Math.sin(t * 1.3) * .08; ctx.strokeStyle = '#3a9a5a'; ctx.lineWidth = s * .1;
+      for (const an of [-2.9, -2.3, -1.6, -.9, -.3]) { ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo(tx + Math.cos(an + sw) * s * .7, ty + Math.sin(an + sw) * s * .5 - s * .2, tx + Math.cos(an + sw) * s * 1.1, ty + Math.sin(an + sw) * s * .6 + s * .3); ctx.stroke(); }
+      ctx.fillStyle = '#6a4a2a'; ctx.beginPath(); ctx.arc(tx - s * .06, ty + s * .1, s * .09, 0, TAU); ctx.arc(tx + s * .08, ty + s * .12, s * .09, 0, TAU); ctx.fill(); break;
     }
     case 'lava': {
       ctx.fillStyle = '#2a1414'; ctx.beginPath(); ctx.moveTo(-s * .8, 0); ctx.lineTo(-s * .5, -s * .9); ctx.lineTo(s * .1, -s * 1.2); ctx.lineTo(s * .7, -s * .6); ctx.lineTo(s * .8, 0); ctx.fill();
@@ -794,13 +844,14 @@ function drawHero(ctx, cx, cy, R, a, t, st = {}) {
 }
 
 /* ── 컷신 ── */
-const CUT_SHAPE = { sakura: 'petal', windy: 'streak', rainy: 'rain', snowy: 'flake', sand: 'dot', starfall: 'star', hell: 'ember', glitch: 'sq', void: 'dot' };
+const CUT_SHAPE = { sakura: 'petal', windy: 'streak', rainy: 'rain', snowy: 'flake', sand: 'dot', starfall: 'star', hell: 'ember', glitch: 'sq', void: 'dot', eclipse: 'ember', deep: 'dot', garden: 'petal', dusk: 'ember', beach: 'dot' };
+const calmFX = () => typeof S !== 'undefined' && S && S.set && S.set.motion;
 class Cutscene {
   constructor(cv) { this.cv = cv; this.ctx = cv.getContext('2d'); this.on = false; }
   start(a, opt) {
     this.a = a; this.opt = opt; this.on = true; this.t = 0;
-    this.tier = tierOf(a.r); this.ex = a.biome || (a.night ? 'starfall' : a.day ? 'sand' : null);
-    const base = [.9, .9, .9, .9, 1.4, 1.9, 2.4, 2.9, 3.6][this.tier] + (a.id === 'voidroll' || a.id === 'worldend' ? .8 : 0);
+    this.tier = tierOf(a.r); this.ex = opt.env || a.biome || (a.summer || a.summerRoll ? 'beach' : a.night ? 'starfall' : a.day ? 'sand' : null);
+    const base = [.9, .9, .9, .9, 1.4, 1.9, 2.4, 2.9, 3.6][Math.min(this.tier, 8)] + Math.max(0, this.tier - 8) * .35 + (a.id === 'voidroll' || a.id === 'worldend' ? .8 : 0);
     this.T1 = base; this.T2 = base + .45;
     this.P = []; this.warp = []; this.waves = []; this.shards = []; this.cracks = []; this.sparks = []; this.shake = 0; this.flash = 0; this.boomed = false; this.fakes = 0;
     this.fx = new AuraFX(); this.fx.hero = true; this.fx.set(a, !!opt.shiny);
@@ -856,7 +907,7 @@ class Cutscene {
     // ── 그리기
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const sx = (Math.random() - .5) * this.shake, sy = (Math.random() - .5) * this.shake;
+    const calm = calmFX(), shk = this.shake * (calm ? .15 : 1), sx = (Math.random() - .5) * shk, sy = (Math.random() - .5) * shk;
     ctx.save(); ctx.translate(sx, sy);
     if (this.env) {
       ctx.globalAlpha = 1; this.env.draw(ctx, w, h, t);
@@ -897,6 +948,7 @@ class Cutscene {
         ctx.beginPath(); for (let i = 0; i <= 8; i++) { const an = i * TAU / 8 * 3; ctx.lineTo(Math.cos(an) * RR * .86, Math.sin(an) * RR * .86); } ctx.stroke();
         ctx.fillStyle = a.c; for (let i = 0; i < 24; i++) { ctx.save(); ctx.rotate(i * TAU / 24); ctx.fillRect(-2, -RR * .97, 4, i % 3 ? 6 : 12); ctx.restore(); }
         ctx.restore();
+        if (a.sym) { ctx.save(); ctx.globalAlpha = Math.min(.9, u * .8); ctx.fillStyle = mix(a.c, '#ffffff', .5); ctx.shadowColor = a.c; ctx.shadowBlur = 20; ctx.font = `${Math.round(Math.min(w, h) * .09)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(a.sym, cx, cy - Math.min(w, h) * .32); ctx.restore(); }
       }
       this.fx.drawBack(ctx, cx, cy, R, t);
       drawHero(ctx, cx, cy, R * 1.15, a, t, { raise: Math.max(0, 1 - u * .6), joy: u > 1.2 ? .5 : 0 });
@@ -911,7 +963,7 @@ class Cutscene {
     }
     if (tier >= 5) { const lb = h * .1 * Math.min(1, t / .5); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(-20, -20, w + 40, lb + 20); ctx.fillRect(-20, h - lb, w + 40, lb + 20); }
     ctx.restore();
-    if (this.flash > 0) { ctx.globalCompositeOperation = tier >= 8 && t < this.T2 + .15 ? 'difference' : 'source-over'; ctx.globalAlpha = this.flash; ctx.fillStyle = t > this.T2 ? mix(a.c, '#ffffff', .6) : '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over'; }
+    if (this.flash > 0) { ctx.globalCompositeOperation = tier >= 8 && t < this.T2 + .15 && !calm ? 'difference' : 'source-over'; ctx.globalAlpha = this.flash * (calm ? .3 : 1); ctx.fillStyle = t > this.T2 ? mix(a.c, '#ffffff', .6) : '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over'; }
   }
   text(ctx, w, h, u) {
     const a = this.a, tier = this.tier, cy = h * .66, o = this.opt;
@@ -934,12 +986,15 @@ class Cutscene {
     ctx.globalAlpha = k2;
     ctx.font = `700 ${Math.round(big * .3)}px 'Cinzel', serif`; ctx.fillStyle = '#ffffff';
     ctx.fillText(a.en.toUpperCase().split('').join(' '), w / 2, cy + big * .85);
-    ctx.font = `700 ${Math.round(big * .34)}px 'Noto Sans KR', sans-serif`; ctx.fillStyle = TIERS[tier].c;
-    ctx.fillText(`${a.fusion ? '융합 · ' : ''}${TIERS[tier].n}  ·  1 / ${Math.round(a.r).toLocaleString('en-US')}`, w / 2, cy + big * 1.5);
+    ctx.font = `700 ${Math.round(big * .34)}px 'Noto Sans KR', sans-serif`; ctx.fillStyle = typeof tierColor === 'function' ? tierColor(a) : TIERS[tier].c;
+    ctx.fillText(`${a.fusion ? '융합 · ' : ''}${typeof tierLabel === 'function' ? tierLabel(a) : TIERS[tier].n}  ·  1 / ${Math.round(a.r).toLocaleString('en-US')}`, w / 2, cy + big * 1.5);
     let yy = cy + big * 2.1; ctx.font = `700 ${Math.round(big * .27)}px 'Noto Sans KR', sans-serif`;
+    if (a.d && u > .9) { ctx.globalAlpha = clamp((u - .9) / .5, 0, 1) * .85; ctx.fillStyle = '#e8e2ff'; ctx.font = `400 ${Math.round(big * .25)}px 'Noto Sans KR', sans-serif`; ctx.fillText(`“${a.d}”`, w / 2, yy); yy += big * .55; ctx.globalAlpha = k2; ctx.font = `700 ${Math.round(big * .27)}px 'Noto Sans KR', sans-serif`; }
     if (o.shiny) { ctx.fillStyle = hsl(u * 140, 1, .8); ctx.fillText('✦ 빛나는 변이 ✦', w / 2, yy); yy += big * .55; }
     if (a.biome) { ctx.fillStyle = BIOMES[a.biome].c; ctx.fillText(`◆ ${BIOMES[a.biome].n} 한정 ◆`, w / 2, yy); yy += big * .55; }
     else if (a.night || a.day) { ctx.fillStyle = a.night ? '#b8c4ff' : '#ffd88a'; ctx.fillText(a.night ? '☾ 밤 한정 ☾' : '☀ 낮 한정 ☀', w / 2, yy); yy += big * .55; }
+    else if (a.summer || a.summerRoll) { ctx.fillStyle = '#55e7ff'; ctx.fillText('☀ 여름 축제 한정 ☀', w / 2, yy); yy += big * .55; }
+    else if (a.mg) { ctx.fillStyle = '#ff9ad8'; ctx.fillText('♡ 매지컬 걸 ♡', w / 2, yy); yy += big * .55; }
     if (o.isNew) { ctx.fillStyle = '#ffd36a'; ctx.font = `900 ${Math.round(big * .3)}px 'Noto Sans KR', sans-serif`; ctx.fillText('★ 첫 발견 ★', w / 2, yy); }
     if (this.canClose() && !o.auto) { ctx.globalAlpha = .45 + .3 * Math.sin(u * 4); ctx.fillStyle = '#ffffff'; ctx.font = `400 13px 'Noto Sans KR', sans-serif`; ctx.fillText('화면을 눌러 계속', w / 2, h * .93); }
     ctx.restore();

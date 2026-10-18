@@ -12,11 +12,12 @@ const SORTED = [...AURAS].sort((a, b) => b.r - a.r);
 let S;
 function defState() {
   return { v: 1, rolls: 0, auras: {}, found: {}, shiny: {}, eq: null, eqShiny: false, mats: {}, pots: { lucky: 2, dice: 1 }, gaunts: {}, eqG: null,
-    charms: {}, eqC: [], coin: 0, lv: 1, xp: 0, destiny: 0, active: {}, next: 1, starBoost: 0,
+    charms: {}, eqC: [], coin: 0, lv: 1, xp: 0, destiny: 0, nick: '', luckBuy: 0, luckBonus: 0, asc: 0, sinceAsc: 0, x10: false, equip: {}, skCd: {}, skb: {}, tc: [], codes: {}, role: 'none', cutOff: {}, ch: {},
+    sum: { sun: 25, rolls: 0, rare: 0, total: 0, claimed: {}, bought: {}, tickets: 0, frag: 0, owned: [], lastDaily: '', force: false, rareUntil: 0, rifts: 0, finale: 0 }, active: {}, next: 1, starBoost: 0,
     biome: 'normal', biomeEnd: Date.now() + 150000, seen: { normal: 1 }, quests: {}, best: null, gateOpen: false,
     mer: { next: Date.now() + 180000, until: 0, offers: [] }, daily: { last: '', streak: 0 }, recent: [],
-    stats: { pots: 0, crafted: 0, play: 0, cuts: 0, sacr: 0, stars: 0, buys: 0, coins: 0, shinies: 0, chests: 0, maxCombo: 0 }, log: [],
-    set: { sound: true, music: true, cut: 4, quick: false, low: false, haptic: true, autoEq: true } };
+    stats: { pots: 0, crafted: 0, play: 0, cuts: 0, sacr: 0, stars: 0, buys: 0, coins: 0, shinies: 0, chests: 0, maxCombo: 0, skills: 0, mats: 0, maxPity: 0, x10: 0 }, log: [],
+    set: { sound: true, music: true, cut: 4, quick: false, low: false, haptic: true, autoEq: true, motion: false, auto10: false } };
 }
 function load() {
   try {
@@ -24,13 +25,18 @@ function load() {
     if (d && d.v === 1) {
       const df = defState(); S = Object.assign(df, d);
       S.set = Object.assign(defState().set, d.set || {}); S.stats = Object.assign(defState().stats, d.stats || {});
-      S.mer = Object.assign(defState().mer, d.mer || {}); S.daily = Object.assign(defState().daily, d.daily || {});
+      S.mer = Object.assign(defState().mer, d.mer || {}); S.daily = Object.assign(defState().daily, d.daily || {}); S.sum = Object.assign(defState().sum, d.sum || {});
       return;
     }
   } catch (e) { }
   S = defState();
 }
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { } }
+let saveFlash = 0;
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { return; }
+  const n = Date.now(); if (n - saveFlash < 9000) return; saveFlash = n;
+  const el = document.getElementById('saveInd'); if (el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+}
 
 /* ── 행운 · 속도 ── */
 const gnt = () => S.eqG ? GAUNTLETS[S.eqG] : null;
@@ -45,8 +51,15 @@ function luckParts() {
   for (const c of cs) if (c.luck) { add += c.luck; parts.push([`부적 · ${c.n}`, `+${Math.round(c.luck * 100)}%`]); }
   const ms = mastery(); if (ms) { add += ms * .05; parts.push([`마스터리 ${ms}개`, `+${ms * 5}%`]); }
   if (S.lv > 1) { add += (S.lv - 1) * .01; parts.push([`레벨 ${S.lv}`, `+${S.lv - 1}%`]); }
+  if (S.luckBuy) { add += S.luckBuy * .2; parts.push([`구매한 행운 ${S.luckBuy}회`, `+${fmt(S.luckBuy * 20)}%`]); }
+  if (S.luckBonus) { add += S.luckBonus; parts.push(['코드·축제 보너스', `+${fmt(S.luckBonus * 100)}%`]); }
+  const el = equipEff().luck; if (el) { add += el; parts.push([`제작 장비 ${Object.keys(S.equip).length}개`, `+${fmt(el * 100)}%`]); }
+  const sc = summerCompass(); if (sc) { add += sc; parts.push(['조개 나침반 (여름 오라)', `+${Math.round(sc * 100)}%`]); }
+  const sp = (S.sum.bought.glow ? .15 : 0) + (S.sum.bought.charm ? .3 : 0); if (sp) { add += sp; parts.push(['여름 축제 장식', `+${Math.round(sp * 100)}%`]); }
   let mul = 1;
   const pl = potEff('luck', true); if (pl > 1) { mul *= pl; parts.push(['물약', fmtX(pl)]); }
+  const sl = skBuff('luck'); if (sl > 1) { mul *= sl; parts.push([`스킬 · ${S.skb.luck.n}`, fmtX(sl)]); }
+  if (S.asc) { mul *= ascMult(); parts.push([`초월 ${S.asc}회`, fmtX(ascMult())]); }
   for (const c of cs) { if (c.bm && c.bm.b === S.biome) { mul *= c.bm.x; parts.push([`${c.n} (${BIOMES[c.bm.b].n})`, fmtX(c.bm.x)]); } if (c.night && isNight()) { mul *= c.night; parts.push([`${c.n} (밤)`, fmtX(c.night)]); } }
   if (S.starBoost > Date.now()) { mul *= 1.5; parts.push(['별똥별 축복', '×1.50']); }
   const cb = comboBonus(); if (cb > 0) { mul *= 1 + cb; parts.push([`콤보 ${COMBO.n}`, fmtX(1 + cb)]); }
@@ -55,31 +68,40 @@ function luckParts() {
 const COMBO = { n: 0, t: 0 };
 function comboBonus() { return COMBO.n >= 3 ? Math.min(.5, COMBO.n * .01) : 0; }
 function baseLuck() { return luckParts().total; }
-function speed() { const g = gnt(); let s = 1 + (g ? g.speed : 0) + potEff('speed'); for (const c of charmsOn()) s += c.speed || 0; return s; }
+function speed() { const g = gnt(); let s = 1 + (g ? g.speed : 0) + potEff('speed') + equipEff().speed + (skBuff('speed') - 1); for (const c of charmsOn()) s += c.speed || 0; return s; }
+function equipEff() { let luck = 0, speed = 0; for (const e of EQUIP) if (S.equip[e.id]) { luck += e.luck || 0; speed += e.speed || 0; } return { luck, speed }; }
+function skBuff(k) { const b = S.skb[k]; return b && b.end > Date.now() ? b.v : 1; }
+function ascMult() { return 1 + S.asc * .5; }
+function rarityMul() { return potEff('rarity', true) * skBuff('rarity') * (S.sum.rareUntil > Date.now() ? 4 : 1); }
+function summerCompass() { return S.sum.bought.compass ? S.sum.owned.length * .02 : 0; }
+const PITY_MAX = 200;
 function bonusEvery() { return charmsOn().some(c => c.every) ? 8 : 10; }
 function tenthMult() { const g = gnt(); return g && g.tenth ? g.tenth : 2; }
 const isTenth = () => (S.rolls + 1) % bonusEvery() === 0;
 function shinyChance() { let x = 1 / 50; for (const c of charmsOn()) if (c.shiny) x *= c.shiny; x *= potEff('shiny', true); return x; }
 function coinMul() { let m = 1; for (const c of charmsOn()) m += c.coin || 0; return m; }
-function effR(a, b) { let r = a.r; if (a.boost && a.boost.b === b) r /= a.boost.x; return r; }
+function effR(a, b) { let r = a.r; if (a.boost && a.boost.b === b) r /= a.boost.x; const tm = BIOMES[b] && BIOMES[b].tm; if (tm) { const m = tm[tierOf(a.r)]; if (m) r /= m; } return r; }
 function eligible(a, b) {
-  if (a.fusion) return false;
+  if (a.fusion || a.summer) return false;
+  if (a.summerRoll && !S.sum.bought.aura) return false;
   if (b === 'glitch') return true;
   if (a.biome && a.biome !== b) return false;
   if (a.night && !isNight()) return false;
   if (a.day && isNight()) return false;
   return true;
 }
-function rollAura(luck) {
-  const b = S.biome;
-  for (const a of SORTED) { if (a.id === 'faint' || !eligible(a, b)) continue; if (Math.random() < luck / effR(a, b)) return a; }
+function rollAura(luck, minTier = 0) {
+  const b = S.biome, rm = rarityMul();
+  for (const a of SORTED) { if (a.id === 'faint' || !eligible(a, b)) continue; if (Math.random() < luck * (a.r >= 1e4 ? rm : 1) / effR(a, b)) return a; }
+  if (minTier > 0) { const pool = AURAS.filter(a => eligible(a, b) && tierOf(a.r) === minTier); if (pool.length) return pick(pool); }
   return AMAP.faint;
 }
+const SHARD_TIER = [1, 2, 5, 12, 30, 80, 200, 500, 800, 1000, 1000, 1000, 1000, 1000];
 function avail(id) { return (S.auras[id] || 0) - (S.eq === id ? 1 : 0); }
 
 /* ── 오디오 ── */
-const SCALES = { normal: [0, 2, 4, 7, 9], windy: [0, 2, 5, 7, 9], rainy: [0, 3, 5, 7, 10], snowy: [0, 2, 4, 7, 11], sand: [0, 1, 4, 5, 7], starfall: [0, 4, 7, 11, 14], hell: [0, 1, 3, 6, 7], sakura: [0, 2, 5, 7, 9], glitch: [0, 1, 6, 7, 11], void: [0, 3, 6, 9, 10] };
-const ROOT = { normal: 220, windy: 233, rainy: 196, snowy: 247, sand: 208, starfall: 262, hell: 165, sakura: 247, glitch: 185, void: 147 };
+const SCALES = { normal: [0, 2, 4, 7, 9], windy: [0, 2, 5, 7, 9], rainy: [0, 3, 5, 7, 10], snowy: [0, 2, 4, 7, 11], sand: [0, 1, 4, 5, 7], starfall: [0, 4, 7, 11, 14], hell: [0, 1, 3, 6, 7], sakura: [0, 2, 5, 7, 9], glitch: [0, 1, 6, 7, 11], void: [0, 3, 6, 9, 10], eclipse: [0, 1, 5, 6, 10], deep: [0, 3, 5, 7, 10], garden: [0, 4, 7, 9, 11], dusk: [0, 2, 3, 7, 9], beach: [0, 2, 4, 7, 9] };
+const ROOT = { normal: 220, windy: 233, rainy: 196, snowy: 247, sand: 208, starfall: 262, hell: 165, sakura: 247, glitch: 185, void: 147, eclipse: 175, deep: 147, garden: 294, dusk: 196, beach: 262 };
 const AU = {
   c: null, m: null, mus: null, nb: null, mt: 0,
   init() {
@@ -107,7 +129,7 @@ const AU = {
   music(dt) { // 날씨별 잔잔한 배경음
     if (!this.ok() || !S.set.music || CUT.on) return;
     this.mt -= dt; if (this.mt > 0) return; this.mt = 4.2;
-    const sc = SCALES[S.biome] || SCALES.normal, root = ROOT[S.biome] * (isNight() ? .84 : 1), pickN = () => root * Math.pow(2, sc[Math.floor(Math.random() * sc.length)] / 12);
+    const sc = SCALES[S.biome] || SCALES.normal, root = (ROOT[S.biome] || 220) * (isNight() ? .84 : 1), pickN = () => root * Math.pow(2, sc[Math.floor(Math.random() * sc.length)] / 12);
     const wave = S.biome === 'glitch' ? 'square' : S.biome === 'hell' ? 'sawtooth' : 'sine', vol = S.biome === 'glitch' || S.biome === 'hell' ? .025 : .06;
     [0, 2, 4].forEach(i => this.tone(root / 2 * Math.pow(2, sc[i] / 12), 6, wave, vol, null, 0, this.mus, 1.6));
     for (let i = 0; i < 3; i++) if (Math.random() < .7) this.tone(pickN() * 2, 1.6, 'triangle', .045, null, .6 + i * rnd(.5, 1.1), this.mus, .02);
@@ -115,7 +137,7 @@ const AU = {
   tick(k) { this.tone(700 + k * 700, .035, 'square', .025); },
   ui() { this.tone(720, .06, 'sine', .06); },
   chime(tier) {
-    const base = [392, 440, 523, 587, 659, 740, 784, 880, 988][tier], ivs = [1, 1.26, 1.5, 2, 2.52, 3];
+    const base = [392, 440, 523, 587, 659, 740, 784, 880, 988][Math.min(tier, 8)], ivs = [1, 1.26, 1.5, 2, 2.52, 3];
     const n = Math.min(6, 2 + Math.floor(tier / 2));
     for (let i = 0; i < n; i++) this.tone(base * ivs[i], .45 + tier * .12, 'triangle', .07, null, i * .06);
     if (tier >= 3) this.tone(base / 2, 1 + tier * .2, 'sine', .12);
@@ -142,7 +164,16 @@ function icon(type, c, s = 22) {
     byte: `<rect x="3" y="5" width="18" height="14" rx="2" fill="${c}"/><text x="12" y="16" font-size="8" font-family="monospace" text-anchor="middle" fill="#000" font-weight="700">01</text>`,
     void: `<circle cx="12" cy="12" r="8" fill="#0a0418" stroke="${c}" stroke-width="2"/><ellipse cx="12" cy="12" rx="11" ry="3.5" fill="none" stroke="${c}" stroke-width="1.2" transform="rotate(-15 12 12)"/>`,
     petal: `<path d="M12 3c4 3 6 7 4 12-1 3-3 5-4 6-1-1-3-3-4-6-2-5 0-9 4-12z" fill="${c}"/><path d="M12 6v13" stroke="#fff" stroke-opacity=".5"/>`,
-    coin: `<circle cx="12" cy="12" r="9" fill="#ffcf4a" stroke="#a8761a" stroke-width="1.6"/><circle cx="12" cy="12" r="6" fill="none" stroke="#fff3c0" stroke-opacity=".7"/><path d="M12 7l1.5 3.5 3.5 1.5-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z" fill="#a8761a"/>`,
+    coin: `<path d="M12 2.5l7.5 7-7.5 12-7.5-12z" fill="#6fd8ff" stroke="#2a5aa8" stroke-width="1.2" stroke-linejoin="round"/><path d="M4.5 9.5h15M9 9.5l3 12 3-12" stroke="#e8fbff" stroke-opacity=".75" fill="none"/><path d="M12 2.5L9 9.5h6z" fill="#fff" opacity=".6"/>`,
+    ring: `<circle cx="12" cy="14" r="6.5" fill="none" stroke="${c}" stroke-width="2.6"/><path d="M9 6l3-3 3 3-3 2.4z" fill="#fff" stroke="${c}"/>`,
+    bolt: `<path d="M13 2L5 13h6l-2 9 9-12h-6z" fill="${c}" stroke="#fff" stroke-opacity=".5"/>`,
+    crown: `<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="${c}"/><rect x="5" y="17" width="14" height="3" rx="1" fill="#fff" opacity=".45"/><circle cx="12" cy="13" r="1.6" fill="#ff5a8a"/>`,
+    boot: `<path d="M7 3h6v9l6 3a2 2 0 011 1.8V20H5V3z" fill="${c}"/><path d="M5 17h15" stroke="#fff" stroke-opacity=".45" stroke-width="1.6"/><path d="M2 8h3M1 11h4" stroke="${c}" stroke-width="1.4" opacity=".6"/>`,
+    cloak: `<path d="M12 3c-3 0-5 2-5 4L3 21h18L17 7c0-2-2-4-5-4z" fill="${c}"/><path d="M12 3v18" stroke="#fff" stroke-opacity=".35"/><circle cx="12" cy="7" r="1.6" fill="#ffd36a"/>`,
+    pendant: `<path d="M5 3q7 9 14 0" fill="none" stroke="${c}" stroke-width="1.6"/><path d="M12 10l4 5-4 7-4-7z" fill="${c}"/><path d="M12 10l4 5H8z" fill="#fff" opacity=".45"/>`,
+    infinity: `<path d="M7 8a4 4 0 100 8c3 0 7-8 10-8a4 4 0 110 8c-3 0-7-8-10-8z" fill="none" stroke="${c}" stroke-width="2.6"/>`,
+    sun: `<circle cx="12" cy="12" r="5" fill="${c}"/><g stroke="${c}" stroke-width="2" stroke-linecap="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></g>`,
+    ticket: `<path d="M3 7h18v3a2 2 0 000 4v3H3v-3a2 2 0 000-4z" fill="${c}"/><path d="M14 7v10" stroke="#fff" stroke-dasharray="2 2" stroke-opacity=".7"/>`,
     potion: `<path d="M9 2h6v2h-1v4.5l5 8.5a3 3 0 01-2.6 4.5H7.6A3 3 0 015 16.5l5-8.5V4H9z" fill="rgba(255,255,255,.12)" stroke="#fff" stroke-opacity=".5"/><path d="M7 14h10l2 3a2 2 0 01-1.8 3H6.8A2 2 0 015 17z" fill="${c}"/><circle cx="10" cy="17" r="1" fill="#fff" opacity=".7"/>`,
     elixir: `<path d="M12 2l3 5v3l4 4v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6l4-4V7z" fill="rgba(255,255,255,.12)" stroke="#fff" stroke-opacity=".5"/><path d="M6 15h12v5a1 1 0 01-1 1H7a1 1 0 01-1-1z" fill="${c}"/><path d="M12 9l1 2 2 .5-2 .5-1 2-1-2-2-.5 2-.5z" fill="${c}"/>`,
     compass: `<circle cx="12" cy="12" r="9" fill="rgba(255,255,255,.08)" stroke="${c}" stroke-width="1.6"/><path d="M12 5l2.5 7-2.5 7-2.5-7z" fill="${c}"/><path d="M12 5l2.5 7h-5z" fill="#fff"/>`,
@@ -190,30 +221,61 @@ const SHOW = { a: null, sh: false, until: 0, joy: 0 };
 
 /* ── 굴림 ── */
 const RS = { on: false, t: 0, dur: 1, res: null, extra: null, nt: 0, isNew: false, auto: false, shiny: false, sus: 0 };
-function startRoll() {
+function doRoll() {
+  const pity = S.destiny >= PITY_MAX, tk = S.sum.force;
+  const tenth = isTenth(), luck = baseLuck() * (tenth ? tenthMult() : 1) * S.next * (pity ? 50 : 1);
+  S.next = 1;
+  let a = rollAura(luck, pity ? 3 : tk ? 2 : 0);
+  if (pity && tierOf(a.r) < 3) a = rollAura(luck, 3);
+  if (tk) { S.sum.force = false; if (S.sum.bought.aura && Math.random() < .35) a = AMAP.summerwave; else if (tierOf(a.r) < 2) a = rollAura(luck, 2); }
+  const t = tierOf(a.r);
+  if (pity || t >= 3) S.destiny = 0; else { S.destiny = Math.min(PITY_MAX, S.destiny + 1); S.stats.maxPity = Math.max(S.stats.maxPity, S.destiny); }
+  const shiny = Math.random() < shinyChance();
+  S.rolls++; S.sinceAsc++; S.tc[t] = (S.tc[t] || 0) + 1;
+  const isNew = !S.found[a.id];
+  grant(a, shiny);
+  const coins = Math.round(SHARD_TIER[Math.min(t, 13)] * coinMul()); S.coin += coins; S.stats.coins += coins;
+  gainXP(XP_TIER[Math.min(t, 8)] * (isNew ? 2 : 1) * (shiny ? 3 : 1));
+  sumRoll(t); dropMat(); dropClassic();
+  return { a, shiny, isNew, coins, pity, tk };
+}
+const bestOf = res => res.reduce((m, r) => (r.a.r > m.a.r || (r.a.r === m.a.r && r.shiny)) ? r : m, res[0]);
+function startRoll(n = 1) {
   if (RS.on || CUT.on || !started) return;
+  if (n === 10 && !S.x10) return unlockX10();
   const now = performance.now() / 1000;
   COMBO.n = now - COMBO.t < 4.5 ? COMBO.n + 1 : 1; COMBO.t = now; if (COMBO.n > S.stats.maxCombo) S.stats.maxCombo = COMBO.n;
-  const destiny = S.destiny >= DESTINY_MAX;
-  const tenth = isTenth(), luck = baseLuck() * (tenth ? tenthMult() : 1) * S.next * (destiny ? 50 : 1);
-  S.next = 1;
-  let a = rollAura(luck);
-  if (destiny) { S.destiny = 0; if (tierOf(a.r) < 2) a = pick(AURAS.filter(x => eligible(x, S.biome) && tierOf(x.r) === 2)) || a; }
-  else S.destiny = Math.min(DESTINY_MAX, S.destiny + (isNight() ? 2 : 1));
-  const shiny = Math.random() < shinyChance();
+  const res = []; for (let i = 0; i < n; i++) res.push(doRoll());
+  const pityHit = res.some(r => r.pity), ticket = res.some(r => r.tk);
+  if (n === 10) S.stats.x10++;
+  const best = bestOf(res);
   const g = gnt(); let extra = null;
-  if (g && g.dbl && Math.random() < g.dbl) extra = rollAura(baseLuck());
-  S.rolls++;
-  const tier = tierOf(a.r), isNew = !S.found[a.id];
-  let dur = 1.5 / speed(); if (S.set.quick && tier < 3 && !shiny) dur *= .4; if (tier >= 2) dur = Math.max(dur, .9 + tier * .12); if (destiny) dur = Math.max(dur, 2);
-  Object.assign(RS, { on: true, t: 0, dur: Math.max(.3, dur), res: a, extra, nt: 0, isNew, shiny, sus: 0, destiny, tease: null });
-  grant(a, shiny); if (extra) grant(extra, false);
-  const coins = Math.round((1 + tier * tier) * coinMul()); S.coin += coins; S.stats.coins += coins; RS.coins = coins;
-  gainXP(XP_TIER[tier] * (isNew ? 2 : 1) * (shiny ? 3 : 1));
-  if (destiny || Math.random() < .045) spawnChest(destiny ? 'gold' : null);
-  dropMat(); checkQuests(); save(); updHUD();
+  if (g && g.dbl && Math.random() < g.dbl) { extra = rollAura(baseLuck()); grant(extra, false); }
+  const a = best.a, tier = tierOf(a.r);
+  let dur = (n === 10 ? 2 : 1.5) / speed(); if (S.set.quick && tier < 3 && !best.shiny) dur *= .4; if (tier >= 2) dur = Math.max(dur, .9 + Math.min(tier, 8) * .12); if (pityHit) dur = Math.max(dur, 2);
+  Object.assign(RS, { on: true, t: 0, dur: Math.max(.3, dur), res: a, extra, nt: 0, isNew: best.isNew, shiny: best.shiny, sus: 0, destiny: pityHit, tease: null, multi: n === 10 ? res : null, coins: res.reduce((s2, r) => s2 + r.coins, 0) });
+  if (pityHit || Math.random() < (n === 10 ? .3 : .045)) spawnChest(pityHit ? 'gold' : null);
+  checkQuests(); save(); updHUD();
   $('#rollBtn').classList.add('busy'); $('#rollBtn').classList.remove('destiny');
-  if (destiny) { banner('운명의 굴림', 'DESTINY ROLL', '#ffd36a', '행운 ×50 · 레어 이상 확정!'); AU.tone(392, 1.4, 'triangle', .12, 784); }
+  if (pityHit) { banner('천장 도달', 'PITY ROLL', '#ffd36a', '행운 ×50 · 에픽 이상 확정!'); AU.tone(392, 1.4, 'triangle', .12, 784); }
+  if (ticket) toast(`${icon('ticket', '#55e7ff', 18)} 파도 티켓 발동 · 레어 이상 확정`);
+}
+function quickRolls(n, label) {
+  const res = []; for (let i = 0; i < n; i++) res.push(doRoll());
+  const best = bestOf(res), t = tierOf(best.a.r);
+  showMulti(res, label); renderRecent(); flyCoins(W / 2, H * .4, 10); AU.chime(Math.min(8, t)); if (best.shiny) AU.shiny();
+  if (t >= 3 && !RS.on) { showResult(best.a, best.isNew, best.shiny); BURST.fire(best.a, t, best.shiny); }
+  checkQuests(); save(); updHUD();
+}
+function unlockX10() {
+  if (S.coin < 3000) { toast(`×10 굴림 해금에는 샤드 3,000개가 필요해요 (지금 ${fmt(S.coin)})`); AU.tone(200, .15, 'square', .04); return; }
+  S.coin -= 3000; S.x10 = true; save(); updHUD(); AU.chime(5); toast('<b>×10 굴림</b> 해금!'); checkQuests();
+}
+function sumRoll(t) {
+  const m = S.sum; m.rolls++;
+  if (m.rolls % 10 === 0) { m.sun += 5; m.total += 5; }
+  if (t >= 2) m.rare++;
+  if (Math.random() < .01) { m.sun += 10; m.total += 10; }
 }
 function grant(a, shiny) {
   S.auras[a.id] = (S.auras[a.id] || 0) + 1; S.found[a.id] = 1;
@@ -238,7 +300,7 @@ function updRoll(dt) {
   $('#rollBar').style.width = Math.min(100, k * 100) + '%';
   RS.sus = rt >= 2 && k > .5 ? Math.min(1, (k - .5) / .4) * Math.min(1, .35 + (rt - 2) * .16) : 0;
   CAM.zt = 1 + .05 * Math.min(1, k * 2) + RS.sus * .08;
-  if (rt >= 4 && k > .6) CAM.shake = Math.max(CAM.shake, (k - .6) * (rt - 2) * 2.2);
+  if (rt >= 4 && k > .6 && !S.set.motion) CAM.shake = Math.max(CAM.shake, (k - .6) * (Math.min(rt, 9) - 2) * 2.2);
   if (k < 1 && RS.t >= RS.nt) {
     const a = teasePick(k); RS.tease = a; setName(a, false); AU.tick(k);
     RS.nt = RS.t + (.05 + .2 * k * k) * clamp(RS.dur / 1.5, .35, 1) * (RS.sus ? 1.5 : 1);
@@ -257,21 +319,21 @@ function levelUp(lv, rw) {
   updHUD();
 }
 function finishRoll() {
-  const a = RS.res, tier = tierOf(a.r), sh = RS.shiny;
+  const a = RS.res, tier = tierOf(a.r), sh = RS.shiny, multi = RS.multi, calm = S.set.motion;
   $('#rollBar').style.width = '0';
   showResult(a, RS.isNew, sh); renderRecent();
   AU.chime(tier); if (sh) AU.shiny();
   const { cx, by, R } = orbPos(); BURST.fire(a, tier, sh);
   SHOW.a = a; SHOW.sh = sh; SHOW.until = T + 1.8 + tier * .2; SHOW.joy = tier >= 2 || RS.isNew ? 1.3 : 0;
-  CAM.hit = tier >= 3 ? .06 + tier * .015 : 0; CAM.flash = tier >= 1 ? Math.min(.9, .12 + tier * .1) : 0; CAM.fc = sh ? '#ffffff' : TIERS[tier].c;
-  CAM.shake = tier >= 2 ? 2 + tier * 2.6 : 0; CAM.z = 1 + Math.min(.16, tier * .025); CAM.zt = 1;
-  if (S.set.cut >= 99 || tier < S.set.cut) popReveal(a, tier, RS.isNew, sh);
+  CAM.hit = tier >= 3 && !calm ? .06 + Math.min(tier, 9) * .015 : 0; CAM.flash = tier >= 1 ? Math.min(.9, .12 + tier * .1) * (calm ? .25 : 1) : 0; CAM.fc = sh ? '#ffffff' : tierColor(a);
+  CAM.shake = tier >= 2 && !calm ? 2 + Math.min(tier, 9) * 2.6 : 0; CAM.z = 1 + Math.min(.16, tier * .025); CAM.zt = 1;
+  const cutOk = S.set.cut < 99 && tier >= S.set.cut && !S.cutOff[a.id];
+  if (!cutOk) { if (multi) showMulti(multi); else popReveal(a, tier, RS.isNew, sh); }
   if (RS.coins >= 5 || tier >= 2) flyCoins(cx, by, Math.min(14, 2 + tier * 2));
   if (tier >= 3 || sh) buzz(tier >= 5 ? [40, 40, 80] : 30);
   if (RS.extra) setTimeout(() => toast(`오류 장갑 발동! 추가 획득 · <b style="color:${RS.extra.c}">${RS.extra.n}</b>`), 300);
   if (sh) setTimeout(() => toast(`✦ <b class="rainbow">빛나는 ${a.n}</b> 획득! (빛나는 확률 1/${fmt(1 / shinyChance())})`), 200);
-  const cutOk = S.set.cut < 99 && tier >= S.set.cut;
-  if (cutOk) playCut(a, { isNew: RS.isNew, shiny: sh, auto: RS.auto }, afterRoll);
+  if (cutOk) playCut(a, { isNew: RS.isNew, shiny: sh, auto: RS.auto }, () => { if (multi) showMulti(multi); afterRoll(); });
   else afterRoll();
 }
 function playCut(a, opt, done) {
@@ -280,12 +342,12 @@ function playCut(a, opt, done) {
   CUT.start(a, Object.assign({ boom: () => { AU.boom(); AU.chime(tier); if (tier >= 5) AU.shatter(); if (opt.shiny) AU.shiny(); buzz(120); }, fake: () => AU.tone(200, .3, 'sine', .2, 60), done }, opt));
 }
 function afterRoll() {
-  $('#rollBtn').classList.remove('busy'); $('#rollBtn').classList.toggle('destiny', S.destiny >= DESTINY_MAX); updHUD();
-  if (RS.auto) setTimeout(() => { if (RS.auto) startRoll(); }, 120);
+  $('#rollBtn').classList.remove('busy'); $('#rollBtn').classList.toggle('destiny', S.destiny >= PITY_MAX); updHUD();
+  if (RS.auto) setTimeout(() => { if (RS.auto) startRoll(S.set.auto10 && S.x10 ? 10 : 1); }, 120);
 }
 function setName(a, final) {
   const el = $('#rName'); el.textContent = a.n; el.style.color = mix(a.c, '#ffffff', .25); el.classList.remove('rainbow');
-  if (!final) { $('#rEn').textContent = a.en.toUpperCase(); $('#rMeta').innerHTML = '<span class="dim">굴리는 중…</span>'; }
+  if (!final) { $('#rEn').textContent = (a.en || '').toUpperCase(); $('#rMeta').innerHTML = '<span class="dim">굴리는 중…</span>'; }
 }
 function tagHTML(a) {
   if (a.biome) return ` <span class="btag" style="color:${BIOMES[a.biome].c}">◆${BIOMES[a.biome].n}</span>`;
@@ -300,7 +362,7 @@ function showResult(a, isNew, shiny) {
   el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
   const tier = tierOf(a.r), er = effR(a, S.biome);
   $('#rEn').textContent = (shiny ? 'SHINY ' : '') + a.en.toUpperCase();
-  $('#rMeta').innerHTML = `<span class="tierTag" style="color:${TIERS[tier].c}">${TIERS[tier].n}</span>1 / ${fmt(a.r)}${er < a.r && !a.fusion ? ` <span class="dim">(지금 1/${fmt(er)})</span>` : ''}${tagHTML(a)}${isNew ? ' <span class="newTag">NEW</span>' : ''}`;
+  $('#rMeta').innerHTML = `<span class="tierTag" style="color:${tierColor(a)}">${a.sym} ${tierLabel(a)}</span>1 / ${fmt(a.r)}${er < a.r && !a.fusion ? ` <span class="dim">(지금 1/${fmt(er)})</span>` : ''}${tagHTML(a)}${isNew ? ' <span class="newTag">NEW</span>' : ''}`;
 }
 function showIdle() {
   const a = S.eq ? AMAP[S.eq] : null;
@@ -319,6 +381,9 @@ function dropMat() {
   let m = BIOMES[b].mat; if (b === 'glitch' && Math.random() < .5) m = pick(Object.keys(MATS).filter(x => x !== 'voiddust'));
   const n = Math.random() < .15 ? 2 : 1; S.mats[m] = (S.mats[m] || 0) + n;
   floatChip(`${icon(MATS[m].ic, MATS[m].c, 16)} +${n} ${MATS[m].n}`);
+}
+function dropClassic() {
+  for (const id in MATS) { const M = MATS[id]; if (!M.drop || Math.random() >= M.drop) continue; S.mats[id] = (S.mats[id] || 0) + 1; S.stats.mats++; if (M.drop < .05) floatChip(`${icon(M.ic, M.c, 16)} +1 ${M.n}`); }
 }
 function floatChip(html) {
   const d = document.createElement('div'); d.className = 'float'; d.innerHTML = html; $('#floats').appendChild(d);
@@ -410,14 +475,14 @@ cv.addEventListener('pointerdown', e => {
 function popReveal(a, tier, isNew, sh) {
   if (tier < 1 && !isNew && !sh) return;
   const el = $('#reveal');
-  el.style.setProperty('--tc', TIERS[tier].c); el.style.setProperty('--ac', a.c);
+  el.style.setProperty('--tc', tierColor(a)); el.style.setProperty('--ac', a.c);
   el.className = 't' + tier + (sh ? ' shiny' : '');
-  el.innerHTML = `<div class="rv">${orbCSS(a, 54, sh)}<div><i>${a.fusion ? '융합 · ' : ''}${TIERS[tier].n}</i><b class="${sh ? 'rainbow' : ''}">${sh ? '✦ ' : ''}${a.n}</b><small>1 / ${fmt(a.r)}</small></div>${isNew ? '<em>NEW!</em>' : ''}</div>`;
+  el.innerHTML = `<div class="rv">${orbCSS(a, 54, sh)}<div><i>${a.fusion ? '융합 · ' : ''}${tierLabel(a)}</i><b class="${sh ? 'rainbow' : ''}">${sh ? '✦ ' : ''}${a.n}</b><small>1 / ${fmt(a.r)}</small></div>${isNew ? '<em>NEW!</em>' : ''}</div>`;
   void el.offsetWidth; el.classList.add('show');
   clearTimeout(popReveal.tm); popReveal.tm = setTimeout(() => el.classList.remove('show'), 1300 + tier * 150);
 }
 
-/* ── 날아가는 주화 ── */
+/* ── 날아가는 샤드 ── */
 const FLY = [];
 function flyCoins(x, y, n) {
   const r = $('#coinVal').getBoundingClientRect(), tx = r.left + 6, ty = r.top + r.height / 2;
@@ -427,8 +492,8 @@ function drawFly(ctx, dt) {
   for (let i = FLY.length - 1; i >= 0; i--) {
     const f = FLY[i]; f.l += dt; if (f.l < 0) continue; const k = Math.min(1, f.l / f.m), e = k * k;
     const x = (1 - k) * (1 - k) * f.x + 2 * (1 - k) * k * f.sx + k * k * f.tx, y = (1 - k) * (1 - k) * f.y + 2 * (1 - k) * k * f.sy + k * k * f.ty;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#ffd36a', x, y, 12, .8); ctx.restore();
-    ctx.fillStyle = '#ffcf4a'; ctx.strokeStyle = '#a8761a'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(x, y, 5 * Math.abs(Math.cos(f.l * 12)) + 1, 5, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#6fd8ff', x, y, 12, .8); ctx.restore();
+    const fw = 5 * Math.abs(Math.cos(f.l * 12)) + 1; ctx.fillStyle = '#6fd8ff'; ctx.strokeStyle = '#2a5aa8'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + fw, y - 1); ctx.lineTo(x, y + 7); ctx.lineTo(x - fw, y - 1); ctx.closePath(); ctx.fill(); ctx.stroke();
     if (k >= 1) { FLY.splice(i, 1); const c = $('#coinBox'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); if (Math.random() < .5) AU.tone(1800 + rnd(0, 400), .05, 'square', .015); }
   }
 }
@@ -518,12 +583,20 @@ function updHUD() {
   if (S.next > 1) h += `<div class="buff hot">${icon('elixir', '#ffe9a8', 18)}다음 굴림 <b>${fmtX(S.next)}</b></div>`;
   if (S.eqG) h += `<div class="buff">${icon('glove', GAUNTLETS[S.eqG].c, 18)}${GAUNTLETS[S.eqG].n}</div>`;
   for (const id of S.eqC) if (CHARMS[id]) h += `<div class="buff">${icon(CHARMS[id].ic, CHARMS[id].c, 18)}${CHARMS[id].n}</div>`;
+  const SKL = { luck: '행운', speed: '속도', rarity: '희귀' };
+  for (const k in S.skb) { const b = S.skb[k], s2 = (b.end - Date.now()) / 1000; if (s2 > 0) h += `<div class="buff sk">✦ ${b.n} · ${SKL[k]} ${fmtX(b.v)} <b>${mmss(s2)}</b></div>`; }
+  if (S.sum.rareUntil > Date.now()) h += `<div class="buff sea">${icon('ticket', '#55e7ff', 18)}파도 티켓 · 희귀 ×4 <b>${mmss((S.sum.rareUntil - Date.now()) / 1000)}</b></div>`;
+  if (S.sum.force) h += `<div class="buff sea">${icon('ticket', '#55e7ff', 18)}다음 굴림 레어 이상 확정</div>`;
   $('#buffs').innerHTML = h;
   $('#lvNum').textContent = S.lv; $('#lvBar').style.width = (S.xp / xpNeed(S.lv) * 100) + '%'; $('#lvTxt').textContent = `${fmt(S.xp)} / ${fmt(xpNeed(S.lv))}`;
-  const dk = S.destiny / DESTINY_MAX; $('#dsBar').style.width = (dk * 100) + '%'; $('#dsTxt').textContent = dk >= 1 ? '운명의 굴림 준비!' : `운명 ${S.destiny}/${DESTINY_MAX}`; $('#destiny').classList.toggle('full', dk >= 1);
+  const dk = S.destiny / PITY_MAX; $('#dsBar').style.width = (dk * 100) + '%'; $('#dsTxt').textContent = dk >= 1 ? '천장 도달 · 에픽 이상 확정!' : `천장 ${S.destiny}/${PITY_MAX}`; $('#destiny').classList.toggle('full', dk >= 1);
   $('#rollBtn').classList.toggle('destiny', dk >= 1 && !RS.on);
-  $('#autoBtn').classList.toggle('on', RS.auto); $('#quickBtn').classList.toggle('on', S.set.quick);
-  $('#qdot').style.display = QUESTS.some(q => !S.quests[q.id] && qDone(q)) ? 'block' : 'none';
+  $('#autoBtn').classList.toggle('on', RS.auto);
+  const xb = $('#x10Btn'); xb.classList.toggle('x10on', S.x10); xb.innerHTML = S.x10 ? `×10${RS.auto && S.set.auto10 ? '<small>자동</small>' : ''}` : `×10<small>${coinI(10)}3,000</small>`;
+  $('#qdot').style.display = QUESTS.some(q => !S.quests[q.id] && qDone(q)) || CHALLENGES.some(c => !S.ch[c.id] && qDone(c)) ? 'block' : 'none';
+  $('#nickTxt').textContent = S.nick; $('#nickTxt').classList.toggle('hide', !S.nick);
+  $('#sunVal').textContent = fmt(S.sum.sun); $('#sumBtn').classList.toggle('hot', sumAlert());
+  updSkill();
 }
 function updBiomeTime() { $('#biomeTime').textContent = mmss((S.biomeEnd - Date.now()) / 1000); }
 
@@ -535,7 +608,7 @@ function checkQuests() {
 }
 function giveReward(rw) {
   const out = [];
-  if (rw.coin) { S.coin += rw.coin; out.push(`주화 ${fmt(rw.coin)}`); }
+  if (rw.coin) { S.coin += rw.coin; S.stats.coins += rw.coin; out.push(`샤드 ${fmt(rw.coin)}`); }
   for (const id in rw.pots || {}) { S.pots[id] = (S.pots[id] || 0) + rw.pots[id]; out.push(`${POTIONS[id].n} ×${rw.pots[id]}`); }
   for (const id in rw.mats || {}) { S.mats[id] = (S.mats[id] || 0) + rw.mats[id]; out.push(`${MATS[id].n} ×${rw.mats[id]}`); }
   return out.join(', ');
@@ -553,7 +626,7 @@ function canPay(cost) { for (const k in cost) { if (k === 'coin') { if (S.coin <
 function pay(cost) { for (const k in cost) { if (k === 'coin') S.coin -= cost[k]; else if (k[0] === '@') S.auras[k.slice(1)] -= cost[k]; else S.mats[k] -= cost[k]; } }
 function costHTML(cost) {
   return '<div class="cost">' + Object.entries(cost).map(([k, n]) => {
-    if (k === 'coin') return `<span class="cc ${S.coin >= n ? '' : 'no'}">${coinI(14)}주화 ${fmt(S.coin)}/${fmt(n)}</span>`;
+    if (k === 'coin') return `<span class="cc ${S.coin >= n ? '' : 'no'}">${coinI(14)}샤드 ${fmt(S.coin)}/${fmt(n)}</span>`;
     if (k[0] === '@') { const a = AMAP[k.slice(1)], have = Math.max(0, avail(a.id)); const known = S.found[a.id];
       return `<span class="cc ${have >= n ? '' : 'no'}">${orbCSS(a, 14)}${known ? a.n : '???'}<i style="color:${TIERS[tierOf(a.r)].c}">${known ? '' : TIERS[tierOf(a.r)].n}</i> ${have}/${n}</span>`; }
     const m = MATS[k], have = S.mats[k] || 0;
@@ -565,8 +638,8 @@ function costHTML(cost) {
 const SH = { stack: [], cur: null, previews: [] };
 function openSheet(title, render, push = false) {
   if (push && SH.cur) SH.stack.push(SH.cur); else if (!push) SH.stack = [];
-  SH.cur = { title, render }; drawSheet(); $('#shBody').scrollTop = 0;
-  $('#sheet').classList.remove('hide');
+  SH.cur = { title, render }; drawSheet();
+  $('#sheet').classList.remove('hide'); $('#shBody').scrollTop = 0;
 }
 function drawSheet() {
   SH.previews = [];
@@ -701,6 +774,7 @@ function npcSVG(id) {
     case 'stella': return base('#10153e', '#2a2a7a', '#f6d2bc', `<path d="M22 38Q20 18 40 17Q60 18 58 38Q56 26 40 25Q24 26 22 38Z" fill="#2a3a8a"/><circle cx="40" cy="13" r="7" fill="#2a3a8a"/><path d="M52 18l2 4 4.5.6-3.3 3 .8 4.4-4-2.2-4 2.2.8-4.4-3.3-3 4.5-.6z" fill="#ffd36a"/>${eyes('#3a2a6a')}<path d="M36 43Q40 46 44 43" stroke="#c05a6a" stroke-width="1.6" fill="none"/><g fill="#ffe9a8"><circle cx="22" cy="66" r="1.5"/><circle cx="58" cy="70" r="1.5"/><circle cx="30" cy="74" r="1"/></g>`);
     case 'keeper': return base('#07030f', '#1a0e3a', '#05020c', `<path d="M18 60Q16 16 40 12Q64 16 62 60Q56 30 40 28Q24 30 18 60Z" fill="#1a0e3a"/><circle cx="34" cy="38" r="2.6" fill="#c8a8ff"/><circle cx="46" cy="38" r="2.6" fill="#c8a8ff"/><circle cx="34" cy="38" r="6" fill="#c8a8ff" opacity=".25"/><circle cx="46" cy="38" r="6" fill="#c8a8ff" opacity=".25"/>`);
     case 'jorr': return base('#2e2a14', '#4a6a3a', '#e8b890', `<path d="M20 26h40l-6-14H26z" fill="#7a5a2a"/><rect x="20" y="24" width="40" height="5" fill="#c84a4a"/>${eyes()}<path d="M30 42Q40 50 50 42" stroke="#5a3a1a" stroke-width="3" fill="none"/><path d="M33 44Q40 48 47 44" stroke="#fff" stroke-width="1.4" fill="none"/><circle cx="58" cy="62" r="6" fill="#ffcf4a" stroke="#a8761a" stroke-width="1.5"/>`);
+    case 'marina': return base('#0e3a5a', '#2a8ad8', '#f6d2bc', `<path d="M22 40Q18 18 40 16Q62 18 58 40Q60 58 54 66Q52 40 40 30Q28 40 26 66Q20 58 22 40Z" fill="#ffb454"/><path d="M18 26Q40 6 62 26L58 28Q40 14 22 28Z" fill="#fff1d6"/><circle cx="56" cy="22" r="4" fill="#ff8fc7"/>${eyes('#1a4a7a')}<path d="M36 43Q40 47 44 43" stroke="#c05a6a" stroke-width="1.6" fill="none"/><path d="M14 74q8-6 16 0t16 0 16 0" stroke="#55e7ff" stroke-width="3" fill="none"/>`);
     case 'lumen': return base('#2a1a40', '#f0e0ff', '#fff6e8', `<circle cx="40" cy="35" r="22" fill="#ffe9a8" opacity=".25"/><path d="M22 30Q40 6 58 30Q50 18 40 18Q30 18 22 30Z" fill="#ff8ad8"/><circle cx="34" cy="36" r="2.4" fill="#8ad8ff"/><circle cx="46" cy="36" r="2.4" fill="#ff8ad8"/><path d="M36 43Q40 46 44 43" stroke="#c05a8a" stroke-width="1.6" fill="none"/><g fill="#fff"><circle cx="16" cy="20" r="2"/><circle cx="64" cy="22" r="1.6"/><circle cx="62" cy="58" r="1.4"/></g>`);
   }
 }
@@ -727,15 +801,25 @@ function pLoc(id, push = true) {
   }, push);
 }
 
+/* 탭 공통 */
+function tabsEl(list, cur, set) {
+  const el = h(`<div class="tabs">${list.map(([k, n]) => `<button data-t="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}</div>`).firstChild;
+  el.querySelectorAll('button').forEach(x => x.onclick = () => { set(x.dataset.t); AU.ui(); refreshSheet(); });
+  return el;
+}
 /* 연금술 */
+let alcTab = 'make';
 function renderAlchemy(b) {
   b.appendChild(h(npcHead('mira')));
+  b.appendChild(tabsEl([['make', '제조'], ['shop', '샤드 상점']], alcTab, t => alcTab = t));
+  if (alcTab === 'shop') b.appendChild(h(`<div class="merbar"><span>${coinI(18)} 샤드 <b>${fmt(S.coin)}</b></span><span class="dim">원작 물약 · 효과는 다른 물약과 곱해져요</span></div>`));
   for (const id in POTIONS) {
-    const P = POTIONS[id], ok = canPay(P.cost);
-    const d = h(`<div class="card"><div class="crow">${potIcon(id, 36)}<div class="cmain"><b style="color:${P.c}">${P.n}</b><small>${P.d}</small></div><span class="own">보유 ${S.pots[id] || 0}</span></div>${costHTML(P.cost)}<button class="btn ${ok ? '' : 'off'}">${ok ? '제조하기' : '재료 부족'}</button></div>`);
+    const P = POTIONS[id], shop = !!P.shop; if (shop !== (alcTab === 'shop')) continue;
+    const ok = canPay(P.cost);
+    const d = h(`<div class="card"><div class="crow">${potIcon(id, 36)}<div class="cmain"><b style="color:${P.c}">${P.n}</b><small>${P.d}</small></div><span class="own">보유 ${S.pots[id] || 0}</span></div>${costHTML(P.cost)}<button class="btn ${shop ? 'gold' : ''} ${ok ? '' : 'off'}">${ok ? (shop ? '구매하기' : '제조하기') : shop ? '샤드 부족' : '재료 부족'}</button></div>`);
     d.querySelector('button').onclick = () => {
       if (!canPay(P.cost)) { AU.tone(200, .15, 'square', .04); return; }
-      pay(P.cost); S.pots[id] = (S.pots[id] || 0) + 1; S.stats.crafted++; AU.get(); toast(`${potIcon(id, 18)} <b>${P.n}</b> 제조 완료`); save(); refreshSheet(); updHUD();
+      pay(P.cost); S.pots[id] = (S.pots[id] || 0) + 1; if (shop) { S.stats.buys++; AU.coin(); } else S.stats.crafted++; AU.get(); toast(`${potIcon(id, 18)} <b>${P.n}</b> ${shop ? '구매' : '제조 완료'} · 가방에서 사용하세요`); save(); refreshSheet(); updHUD();
     };
     b.appendChild(d);
   }
@@ -744,9 +828,7 @@ function renderAlchemy(b) {
 let forgeTab = 'g';
 function renderForge(b) {
   b.appendChild(h(npcHead('bran')));
-  const tabs = h(`<div class="tabs"><button data-t="g">장갑</button><button data-t="c">부적 <small>${S.eqC.length}/2 장착</small></button></div>`).firstChild;
-  tabs.querySelectorAll('button').forEach(x => { x.classList.toggle('on', x.dataset.t === forgeTab); x.onclick = () => { forgeTab = x.dataset.t; AU.ui(); refreshSheet(); }; });
-  b.appendChild(tabs);
+  b.appendChild(tabsEl([['g', '장갑'], ['c', `부적 <small>${S.eqC.length}/2</small>`], ['e', `장비 <small>${Object.keys(S.equip).length}/${EQUIP.length}</small>`]], forgeTab, t => forgeTab = t));
   if (forgeTab === 'g') for (const id in GAUNTLETS) {
     const G = GAUNTLETS[id], own = S.gaunts[id], eq = S.eqG === id, ok = canPay(G.cost);
     const d = h(`<div class="card ${eq ? 'eqd' : ''}"><div class="crow">${icon('glove', G.c, 36)}<div class="cmain"><b style="color:${G.c}">${G.n}</b><small>${G.d}</small></div>${eq ? '<span class="own on">장착 중</span>' : own ? '<span class="own">보유</span>' : ''}</div>${own ? '' : costHTML(G.cost)}<button class="btn ${own ? (eq ? 'ghost' : '') : ok ? '' : 'off'}">${own ? (eq ? '해제' : '장착') : ok ? '제작하기' : '재료 부족'}</button></div>`);
@@ -757,7 +839,24 @@ function renderForge(b) {
     };
     b.appendChild(d);
   }
-  else for (const id in CHARMS) b.appendChild(charmCard(id, true));
+  else if (forgeTab === 'c') for (const id in CHARMS) b.appendChild(charmCard(id, true));
+  else renderEquip(b);
+}
+function renderEquip(b) {
+  const ee = equipEff();
+  b.appendChild(h(`<div class="card now" style="--bc:#ffd36a"><small>원작 제작소 · 영구 장비</small><b>행운 +${fmt(ee.luck * 100)}% · 속도 +${fmt(ee.speed * 100)}%</b><p class="dim">한 번 만들면 영구히 적용되고 모두 겹쳐요. 재료는 날씨와 상관없이 굴릴 때마다 떨어져요.</p><div class="cost">${['o_dust', 'o_frag', 'o_core', 'o_star', 'o_void'].map(k => `<span class="cc">${icon(MATS[k].ic, MATS[k].c, 14)}${MATS[k].n} ${S.mats[k] || 0} <i class="dim">${MATS[k].drop * 100}%</i></span>`).join('')}</div></div>`));
+  for (const e of EQUIP) {
+    const own = S.equip[e.id], lock = e.req && !S.equip[e.req], ok = !own && !lock && canPay(e.cost);
+    const eff = e.luck ? `영구 행운 +${fmt(e.luck * 100)}%` : `영구 속도 +${fmt(e.speed * 100)}%`;
+    const req = lock ? `<small style="color:#ff9aaa">먼저 「${EQUIP.find(x => x.id === e.req).n}」 필요</small>` : '';
+    const d = h(`<div class="card ${own ? 'eqd' : ''} ${lock ? 'locked' : ''}"><div class="crow">${icon(e.ic, lock ? '#555a70' : e.c, 36)}<div class="cmain"><b style="color:${lock ? '#888' : e.c}">${e.n}</b><small>${eff}</small>${req}</div>${own ? '<span class="own on">제작 완료</span>' : ''}</div>${own ? '' : costHTML(e.cost)}${own ? '' : `<button class="btn ${ok ? '' : 'off'}">${lock ? '잠김' : ok ? '제작하기' : '재료 부족'}</button>`}</div>`);
+    const bt = d.querySelector('button');
+    if (bt) bt.onclick = () => {
+      if (S.equip[e.id] || (e.req && !S.equip[e.req]) || !canPay(e.cost)) { AU.tone(200, .15, 'square', .04); return; }
+      pay(e.cost); S.equip[e.id] = 1; AU.get(); AU.tone(220, .3, 'square', .05); AU.chime(4); toast(`${icon(e.ic, e.c, 18)} <b>${e.n}</b> 제작 · ${eff}`); save(); checkQuests(); refreshSheet(); updHUD();
+    };
+    b.appendChild(d);
+  }
 }
 function charmCard(id, craft) {
   const C = CHARMS[id], own = S.charms[id], eq = S.eqC.includes(id), ok = canPay(C.cost);
@@ -778,7 +877,7 @@ function renderObs(b) {
   let list = '<h3 class="sub">날씨 도감</h3>';
   for (const [k, x] of Object.entries(BIOMES)) {
     if (k === 'void' && !S.gateOpen) { list += `<div class="brow lock"><i style="background:#333"></i><div><b>???</b><small>공허의 문을 열어야 관측할 수 있어요</small></div></div>`; continue; }
-    const ex = AURAS.filter(a => a.biome === k), chance = x.w ? (x.w / tot * 55).toFixed(1) + '%' : '기본';
+    const ex = AURAS.filter(a => a.biome === k), chance = x.w ? (x.w / tot * 55).toFixed(1) + '%' : k === 'beach' ? '여름 균열' : '기본';
     list += `<div class="brow ${S.seen[k] ? '' : 'lock'}"><i style="background:${x.c};box-shadow:0 0 8px ${x.c}"></i><div><b>${S.seen[k] ? x.n : '미관측'} <span class="dim">· 전환 시 ${chance}</span></b><small>${x.d}</small>${ex.length ? `<div class="exl">${ex.map(a => `<span>${S.found[a.id] ? orbCSS(a, 12) + a.n : '??? '}<i>1/${fmt(a.r)}</i></span>`).join('')}</div>` : ''}</div></div>`;
   }
   const nd = AURAS.filter(a => a.night || a.day);
@@ -797,15 +896,15 @@ function renderGate(b) {
   const bulk = h(`<div class="card"><b>공물 바치기</b><p class="dim">중복 오라를 바치면 등급에 따라 공허 가루를 얻어요. (커먼 1 · 레어 2 · 에픽 3 · 레전더리 5 …) 장착 중인 1개는 남겨둬요.</p><button class="btn">커먼·언커먼 중복 모두 바치기 (각 1개 남김)</button><div class="sacl"></div></div>`);
   bulk.querySelector('button').onclick = () => {
     let gain = 0, cnt = 0;
-    for (const a of AURAS) { if (tierOf(a.r) > 1) continue; const n = Math.max(0, avail(a.id) - 1); if (n > 0) { S.auras[a.id] -= n; gain += n * SAC[tierOf(a.r)]; cnt += n; } }
+    for (const a of AURAS) { if (tierOf(a.r) > 1) continue; const n = Math.max(0, avail(a.id) - 1); if (n > 0) { S.auras[a.id] -= n; gain += n * SAC[Math.min(tierOf(a.r), 8)]; cnt += n; } }
     if (!cnt) { toast('바칠 중복 오라가 없어요'); return; }
     S.mats.voiddust = (S.mats.voiddust || 0) + gain; S.stats.sacr += cnt; AU.boom(); toast(`${cnt}개를 바쳐 ${icon('void', '#9a6cff', 16)} 공허 가루 +${gain}`); save(); refreshSheet();
   };
   const sl = bulk.querySelector('.sacl');
   for (const a of SORTED) {
     const n = avail(a.id); if (n <= 1) continue; const tr = tierOf(a.r);
-    const row = h(`<div class="srow">${orbCSS(a, 22)}<b style="color:${a.c}">${a.n}</b><span class="dim">×${S.auras[a.id]}</span><button class="mini">+${SAC[tr]} 바치기</button></div>`).firstChild;
-    row.querySelector('button').onclick = () => { if (avail(a.id) <= 1) return; S.auras[a.id]--; S.mats.voiddust = (S.mats.voiddust || 0) + SAC[tr]; S.stats.sacr++; AU.tone(160, .4, 'sine', .15, 60); save(); refreshSheet(); };
+    const row = h(`<div class="srow">${orbCSS(a, 22)}<b style="color:${a.c}">${a.n}</b><span class="dim">×${S.auras[a.id]}</span><button class="mini">+${SAC[Math.min(tr, 8)]} 바치기</button></div>`).firstChild;
+    row.querySelector('button').onclick = () => { if (avail(a.id) <= 1) return; S.auras[a.id]--; S.mats.voiddust = (S.mats.voiddust || 0) + SAC[Math.min(tr, 8)]; S.stats.sacr++; AU.tone(160, .4, 'sine', .15, 60); save(); refreshSheet(); };
     sl.appendChild(row);
   }
   if (!sl.children.length) sl.appendChild(h('<p class="dim">2개 이상 가진 오라가 아직 없어요.</p>'));
@@ -832,42 +931,56 @@ function renderMerchant(b) {
   S.mer.offers.forEach((o, i) => {
     const P = o.k === 'pot' ? POTIONS[o.id] : MATS[o.id], ic = o.k === 'pot' ? potIcon(o.id, 36) : icon(MATS[o.id].ic, MATS[o.id].c, 36), ok = !o.sold && S.coin >= o.p;
     const d = h(`<div class="card ${o.sold ? 'sold' : ''}"><div class="crow">${ic}<div class="cmain"><b style="color:${P.c}">${P.n} ×${o.n}</b><small>${o.k === 'pot' ? P.d : '재료'}</small></div><button class="btn sm gold ${ok ? '' : 'off'}">${o.sold ? '품절' : `${coinI(14)} ${fmt(o.p)}`}</button></div></div>`);
-    d.querySelector('button').onclick = () => { if (o.sold) return; if (S.coin < o.p) { toast('주화가 부족해요'); return; } buyOffer(i); toast(`${P.n} ×${o.n} 구매`); };
+    d.querySelector('button').onclick = () => { if (o.sold) return; if (S.coin < o.p) { toast('샤드가 부족해요'); return; } buyOffer(i); toast(`${P.n} ×${o.n} 구매`); };
     b.appendChild(d);
   });
 }
 
 /* ── 도감 ── */
+let idxF = 'all';
+const isSpecial = a => a.biome || a.fusion || a.night || a.day || a.mg || a.summer || a.summerRoll;
 function pIndex(push) {
   openSheet(`오라 도감 <span class="cnt">${found(S)} / ${AURAS.length}</span>`, b => {
     if (push) b.appendChild(h(npcHead('quill')));
     const best = S.best ? AMAP[S.best] : null, ml = masteryList(S), md = ml.filter(m => m.done).length;
     b.appendChild(h(`<div class="pbar big"><i style="width:${found(S) / AURAS.length * 100}%"></i></div>${best ? `<p class="dim center">최고 기록 · <b style="color:${best.c}">${best.n}</b> (1/${fmt(best.r)}) · 빛나는 ${Object.keys(S.shiny).length}종</p>` : ''}
       <details class="mast"><summary>마스터리 <b>${md}/${ml.length}</b> · 영구 행운 <b>+${md * 5}%</b></summary><div class="mlist">${ml.map(m => `<div class="${m.done ? 'done' : ''}"><span style="color:${m.c}">${m.n}</span><i>${m.have}/${m.all}</i>${m.done ? '<em>+5%</em>' : ''}</div>`).join('')}</div><p class="hint">한 등급(일반 오라) 또는 한 날씨의 한정 오라를 모두 모으면 영구 행운 +5%</p></details>`));
+    const nOld = AURAS.filter(a => a.src).length;
+    const chips = h(`<div class="chips">${[['all', '전체'], ['new', `리뉴얼 ${AURAS.length - nOld}`], ['old', `원작 ${nOld}`], ['miss', '미발견']].map(([k, n]) => `<button data-f="${k}" class="${idxF === k ? 'on' : ''}">${n}</button>`).join('')}</div>`).firstChild;
+    chips.querySelectorAll('button').forEach(x => x.onclick = () => { idxF = x.dataset.f; AU.ui(); refreshSheet(); });
+    b.appendChild(chips);
+    const F = a => idxF === 'all' || (idxF === 'new' && !a.src) || (idxF === 'old' && a.src) || (idxF === 'miss' && !S.found[a.id]);
     const groups = [];
-    const plain = a => !a.biome && !a.fusion && !a.night && !a.day;
-    for (let t = 0; t < TIERS.length; t++) groups.push([`<span style="color:${TIERS[t].c}">${TIERS[t].n}</span>`, AURAS.filter(a => plain(a) && tierOf(a.r) === t)]);
+    for (let t = 0; t < TIERS.length; t++) groups.push([`<span style="color:${TIERS[t].c}">${TIERS[t].n}</span>`, AURAS.filter(a => !isSpecial(a) && tierOf(a.r) === t)]);
+    groups.push(['<span style="color:#ff9ad8">♡ 매지컬 걸</span>', AURAS.filter(a => a.mg)]);
     groups.push(['<span style="color:#ffd88a">☀ 낮</span> · <span style="color:#b8c4ff">☾ 밤 한정</span>', AURAS.filter(a => a.night || a.day)]);
     groups.push(['<span style="color:#7fe8d6">◆ 날씨 한정</span>', AURAS.filter(a => a.biome)]);
+    groups.push(['<span style="color:#55e7ff">≋ 여름 축제</span>', AURAS.filter(a => a.summer || a.summerRoll)]);
     groups.push(['<span style="color:#ffe9a8">✦ 융합 전용</span>', AURAS.filter(a => a.fusion)]);
-    for (const [title, list] of groups) {
-      if (!list.length) continue;
-      const fc = list.filter(a => S.found[a.id]).length;
-      const sec = h(`<h3 class="sub">${title} <span class="dim">${fc}/${list.length}</span></h3><div class="agrid"></div>`);
+    let shown = 0;
+    for (const [title, all] of groups) {
+      const list = all.filter(F); if (!list.length) continue; shown += list.length;
+      const fc = all.filter(a => S.found[a.id]).length;
+      const sec = h(`<h3 class="sub">${title} <span class="dim">${fc}/${all.length}</span></h3><div class="agrid"></div>`);
       const grid = sec.querySelector('.agrid');
       for (const a of list.sort((x, y) => x.r - y.r)) {
         const fd = S.found[a.id], cnt = S.auras[a.id] || 0, sh = S.shiny[a.id];
-        const tag = a.biome ? `<i class="bb" style="color:${BIOMES[a.biome].c}">${BIOMES[a.biome].n}</i>` : a.night ? '<i class="bb" style="color:#b8c4ff">☾밤</i>' : a.day ? '<i class="bb" style="color:#ffd88a">☀낮</i>' : '';
-        const cell = h(`<button class="acell ${fd ? '' : 'lock'} ${S.eq === a.id ? 'eq' : ''}" style="--tc:${TIERS[tierOf(a.r)].c}">${fd ? orbCSS(a, 38, sh) : '<span class="morb q">?</span>'}<b style="${fd ? `color:${mix(a.c, '#ffffff', .3)}` : ''}">${fd ? a.n : '???'}</b><small>1/${fmt(a.r)}</small>${tag}${fd ? `<em>${sh ? '<s>✦</s>' : ''}×${cnt}</em>` : ''}</button>`).firstChild;
+        const tag = a.biome ? `<i class="bb" style="color:${BIOMES[a.biome].c}">${BIOMES[a.biome].n}</i>` : a.night ? '<i class="bb" style="color:#b8c4ff">☾밤</i>' : a.day ? '<i class="bb" style="color:#ffd88a">☀낮</i>' : a.summer || a.summerRoll ? '<i class="bb" style="color:#55e7ff">≋여름</i>' : a.src && idxF !== 'old' ? '<i class="bb" style="color:#9a94c4">원작</i>' : '';
+        const cell = h(`<button class="acell ${fd ? '' : 'lock'} ${S.eq === a.id ? 'eq' : ''}" style="--tc:${tierColor(a)}">${fd ? orbCSS(a, 38, sh) : '<span class="morb q">?</span>'}<b style="${fd ? `color:${mix(a.c, '#ffffff', .3)}` : ''}">${fd ? a.n : '???'}</b><small>1/${fmt(a.r)}</small>${tag}${fd ? `<em>${sh ? '<s>✦</s>' : ''}×${cnt}</em>` : ''}</button>`).firstChild;
         cell.onclick = () => { AU.ui(); pAura(a.id); };
         grid.appendChild(cell);
       }
       b.appendChild(sec);
     }
+    if (!shown) b.appendChild(h('<p class="empty">조건에 맞는 오라가 없어요</p>'));
   }, push);
 }
+function equipAura(id, shiny) {
+  const a = AMAP[id]; S.eq = id; S.eqShiny = !!shiny; save(); if (shiny) AU.shiny(); else AU.get(); showIdle(); updHUD(); refreshSheet();
+  toast(shiny ? `<b class="rainbow">✦ 빛나는 ${a.n}</b> 장착 · 스킬 「${a.sk.n}」` : `<b style="color:${a.c}">${a.n}</b> 장착 · 스킬 「${a.sk.n}」`);
+}
 function pAura(id) {
-  const a = AMAP[id], fd = S.found[id], tier = tierOf(a.r);
+  const a = AMAP[id], fd = S.found[id];
   openSheet(fd ? a.n : '???', b => {
     const shOwn = !!S.shiny[id], showSh = shOwn && S.eq === id ? S.eqShiny : shOwn;
     if (fd) addPreview(b, a, 250, showSh);
@@ -876,26 +989,39 @@ function pAura(id) {
     const fu = a.fusion ? FUSIONS.find(f => f.out === id) : null;
     b.appendChild(h(`<div class="adet">
       <div class="en">${fd ? a.en.toUpperCase() : '? ? ?'}</div>
-      <div><span class="tierTag" style="color:${TIERS[tier].c}">${TIERS[tier].n}</span><b>1 / ${fmt(a.r)}</b></div>
+      <div><span class="tierTag" style="color:${tierColor(a)}">${a.sym} ${tierLabel(a)}</span><b>1 / ${fmt(a.r)}</b></div>
       ${a.biome ? `<p style="color:${BIOMES[a.biome].c}">◆ ${BIOMES[a.biome].n} 날씨에서만 등장 (글리치 날씨 포함)</p>` : ''}
       ${a.night ? '<p style="color:#b8c4ff">☾ 밤에만 등장 (글리치 날씨 포함)</p>' : a.day ? '<p style="color:#ffd88a">☀ 낮에만 등장 (글리치 날씨 포함)</p>' : ''}
+      ${a.summer ? '<p style="color:#55e7ff">≋ 여름 축제 균열에서만 얻을 수 있어요</p>' : a.summerRoll ? `<p style="color:#55e7ff">≋ 여름 상점에서 해금하면 굴림에 섞여 나와요 ${S.sum.bought.aura ? '(해금됨)' : '(미해금)'}</p>` : ''}
+      ${a.mg ? '<p style="color:#ff9ad8">♡ 원작의 특별 등급 · 매지컬 걸</p>' : ''}
       ${fu ? '<p style="color:#ffe9a8">✦ 융합의 제단에서만 만들 수 있어요</p>' : ''}
       ${a.boost ? `<p class="dim">${BIOMES[a.boost.b].n} 날씨에서 확률 ${a.boost.x}배</p>` : ''}
-      ${fu ? '' : `<p class="dim">지금 조건에서: ${canNow ? `1 / ${fmt(er)}` : '등장 안 함'}</p>`}
+      ${fu || a.summer ? '' : `<p class="dim">지금 조건에서: ${canNow ? `1 / ${fmt(er)}` : '등장 안 함'}</p>`}
+      ${a.src ? '<p class="dim">원작 VOIDROLL에서 온 오라</p>' : ''}
       ${fd ? `<p class="desc">${a.d}</p><p class="dim">보유 ${S.auras[id] || 0}개${shOwn ? ` · <span class="rainbow">빛나는 ${S.shiny[id]}개</span>` : ''}</p>` : ''}
     </div>`));
+    if (fd) {
+      const k = a.sk, left = Math.max(0, ((S.skCd[id] || 0) - Date.now()) / 1000);
+      b.appendChild(h(`<div class="card skc"><div class="crow"><span class="sksym" style="color:${a.c}">${a.sym}</span><div class="cmain"><b>스킬 · ${k.n}</b><small>${k.d}</small><small>재사용 ${mmss(k.cd)}${left > 0 ? ` · <span style="color:#ffb0c0">남은 시간 ${mmss(left)}</span>` : ''}</small></div></div><p class="dim" style="font-size:12px">오라를 장착하면 화면 왼쪽의 스킬 버튼으로 쓸 수 있어요.</p></div>`));
+    }
     if (fd && (S.auras[id] || 0) > 0) {
       const row = h(`<div class="brow2"></div>`).firstChild;
       const btn = h(`<button class="btn big">${S.eq === id && !S.eqShiny ? '장착 중' : '장착하기'}</button>`).firstChild;
       if (S.eq === id && !S.eqShiny) btn.classList.add('ghost');
-      btn.onclick = () => { S.eq = id; S.eqShiny = false; save(); AU.get(); showIdle(); refreshSheet(); toast(`<b style="color:${a.c}">${a.n}</b> 장착`); };
+      btn.onclick = () => equipAura(id, false);
       row.appendChild(btn);
       if (shOwn) {
         const b2 = h(`<button class="btn big shinyb">${S.eq === id && S.eqShiny ? '✦ 빛나는 버전 장착 중' : '✦ 빛나는 버전 장착'}</button>`).firstChild;
-        b2.onclick = () => { S.eq = id; S.eqShiny = true; save(); AU.shiny(); showIdle(); refreshSheet(); toast(`<b class="rainbow">✦ 빛나는 ${a.n}</b> 장착`); };
+        b2.onclick = () => equipAura(id, true);
         row.appendChild(b2);
       }
       b.appendChild(row);
+    }
+    if (fd) {
+      const rp = h(`<div class="brow2"><button class="btn ghost" id="replay">▶ 컷신 다시 보기</button></div><div class="setrow"><span>이 오라 컷신 재생</span><button class="tg ${S.cutOff[id] ? '' : 'on'}" id="cutTg"><i></i></button></div>`);
+      rp.querySelector('#replay').onclick = () => { if (RS.on || CUT.on) return; closeSheet(); playCut(a, { isNew: false, shiny: showSh, auto: false, label: '다시 보기' }, () => { }); };
+      rp.querySelector('#cutTg').onclick = () => { if (S.cutOff[id]) delete S.cutOff[id]; else S.cutOff[id] = 1; AU.ui(); save(); refreshSheet(); };
+      b.appendChild(rp);
     }
     if (fu) { const go = h(`<button class="btn ghost">융합의 제단으로 가기</button>`).firstChild; go.onclick = () => pLoc('fusion'); b.appendChild(go); }
   }, true);
@@ -905,7 +1031,7 @@ function pAura(id) {
 let bagTab = 'pots';
 function pBag() {
   openSheet('가방', b => {
-    b.appendChild(h(`<div class="merbar"><span>${coinI(18)} 주화 <b>${fmt(S.coin)}</b></span><span class="dim">굴릴 때마다 등급에 따라 쌓여요</span></div>`));
+    b.appendChild(h(`<div class="merbar"><span>${coinI(18)} 샤드 <b>${fmt(S.coin)}</b></span><span class="dim">굴릴 때마다 등급에 따라 쌓여요</span></div>`));
     const tabs = h(`<div class="tabs"><button data-t="pots">물약</button><button data-t="mats">재료</button><button data-t="gl">장갑</button><button data-t="ch">부적</button></div>`).firstChild;
     tabs.querySelectorAll('button').forEach(x => { x.classList.toggle('on', x.dataset.t === bagTab); x.onclick = () => { bagTab = x.dataset.t; AU.ui(); refreshSheet(); }; });
     b.appendChild(tabs);
@@ -921,7 +1047,7 @@ function pBag() {
     } else if (bagTab === 'mats') {
       let s = '<div class="mgrid">';
       for (const id in MATS) { const M = MATS[id], n = S.mats[id] || 0; s += `<div class="mcell ${n ? '' : 'lock'}">${icon(M.ic, M.c, 30)}<b>${M.n}</b><span>${n}</span></div>`; }
-      s += '</div><p class="hint">재료는 굴릴 때 약 10% 확률로 나와요. 날씨마다 나오는 재료가 달라요.</p>';
+      s += '</div><p class="hint">위쪽 재료는 굴릴 때 약 10% 확률로, 날씨마다 다르게 나와요. 「차원의 먼지」부터는 원작 재료로 날씨와 상관없이 떨어지고 대장간 → 장비 제작에 써요.</p>';
       b.appendChild(h(s));
     } else if (bagTab === 'gl') {
       let any = false;
@@ -942,7 +1068,7 @@ function pBag() {
 function usePot(id) {
   if (!S.pots[id]) return; const P = POTIONS[id], e = P.eff;
   if (e.biome) {
-    if (e.biome === 'random') { const ent = Object.keys(BIOMES).filter(k => k !== 'normal' && k !== 'glitch' && k !== 'void' && k !== S.biome); setBiome(pick(ent)); }
+    if (e.biome === 'random') { const ent = Object.keys(BIOMES).filter(k => k !== 'normal' && k !== 'glitch' && k !== 'void' && k !== 'beach' && k !== S.biome); setBiome(pick(ent)); }
     else setBiome(e.biome, e.t);
   } else if (e.next) { S.next *= e.next; toast(`다음 굴림 행운 <b>${fmtX(S.next)}</b>`); }
   else { const now = Date.now(); S.active[id] = Math.max(now, S.active[id] || 0) + e.t * 1000; toast(`${potIcon(id, 18)} <b>${P.n}</b> 효과 시작`); }
@@ -951,16 +1077,22 @@ function usePot(id) {
 }
 
 /* ── 퀘스트 ── */
+let qTab = 'q';
 function pQuest() {
   openSheet('퀘스트', b => {
-    const list = [...QUESTS].sort((x, y) => (S.quests[x.id] ? 1 : 0) - (S.quests[y.id] ? 1 : 0) || (qDone(y) ? 1 : 0) - (qDone(x) ? 1 : 0));
-    const ready = list.filter(q => !S.quests[q.id] && qDone(q));
-    if (ready.length > 1) { const all = h(`<button class="btn gold">보상 모두 받기 (${ready.length})</button>`).firstChild; all.onclick = () => { const t = ready.map(q => { S.quests[q.id] = 1; return giveReward(q.rw); }); AU.chime(5); toast(`보상 ${ready.length}개 획득`); save(); updHUD(); refreshSheet(); }; b.appendChild(all); }
+    const chDone = CHALLENGES.filter(c => S.ch[c.id]).length;
+    b.appendChild(tabsEl([['q', '퀘스트'], ['c', `도전 과제 <small>${chDone}/${CHALLENGES.length}</small>`]], qTab, t => qTab = t));
+    const isC = qTab === 'c', src = isC ? CHALLENGES : QUESTS, cl = isC ? S.ch : S.quests;
+    const list = [...src].sort((x, y) => (cl[x.id] ? 1 : 0) - (cl[y.id] ? 1 : 0) || (qDone(y) ? 1 : 0) - (qDone(x) ? 1 : 0));
+    const ready = list.filter(q => !cl[q.id] && qDone(q));
+    if (ready.length > 1) { const all = h(`<button class="btn gold">보상 모두 받기 (${ready.length})</button>`).firstChild; all.onclick = () => { ready.forEach(q => { cl[q.id] = 1; giveReward(q.rw); }); AU.chime(5); AU.coin(); toast(`보상 ${ready.length}개 획득`); save(); updHUD(); refreshSheet(); }; b.appendChild(all); }
+    if (isC) b.appendChild(h('<p class="hint">원작 VOIDROLL의 도전 과제예요. 보상은 샤드로 받아요.</p>'));
     for (const q of list) {
-      const [v, g] = q.goal(S), done = v >= g, cl = S.quests[q.id];
-      const d = h(`<div class="card q ${cl ? 'claimed' : done ? 'ready' : ''}"><div class="crow"><div class="cmain"><b>${q.n}</b><small>${q.d}</small></div>${cl ? '<span class="own">완료</span>' : ''}</div>${cl ? '' : `<div class="pbar"><i style="width:${Math.min(100, v / g * 100)}%"></i></div><div class="qmeta"><span class="dim">${fmt(Math.min(v, g))} / ${fmt(g)}</span><span class="rw">${rwText(q.rw)}</span></div>`}${done && !cl ? '<button class="btn">보상 받기</button>' : ''}</div>`);
+      const [v, g] = q.goal(S), done = v >= g, c = cl[q.id];
+      const diff = q.diff ? `<span class="diff ${q.diff}">${q.diff === 'extreme' ? '극한' : '어려움'}</span>` : '';
+      const d = h(`<div class="card q ${c ? 'claimed' : done ? 'ready' : ''}"><div class="crow"><div class="cmain"><b>${q.n}${diff}</b><small>${q.d}</small></div>${c ? '<span class="own">완료</span>' : ''}</div>${c ? '' : `<div class="pbar"><i style="width:${Math.min(100, v / g * 100)}%"></i></div><div class="qmeta"><span class="dim">${fmt(Math.min(v, g))} / ${fmt(g)}</span><span class="rw">${rwText(q.rw)}</span></div>`}${done && !c ? '<button class="btn">보상 받기</button>' : ''}</div>`);
       const btn = d.querySelector('button');
-      if (btn) btn.onclick = () => { S.quests[q.id] = 1; const t = giveReward(q.rw); AU.chime(4); toast(`보상 획득 · ${t}`); save(); updHUD(); refreshSheet(); };
+      if (btn) btn.onclick = () => { cl[q.id] = 1; const t = giveReward(q.rw); AU.chime(4); toast(`보상 획득 · ${t}`); save(); updHUD(); refreshSheet(); };
       b.appendChild(d);
     }
   });
@@ -981,53 +1113,341 @@ function checkDaily() {
   });
 }
 
-/* ── 행운 상세 ── */
+/* ── 행운 상세 · 행운 구매 · 초월 ── */
+const ASC_NEED = 300;
+const luckCost = () => 50 + S.luckBuy * 12;
+function buyLuck() {
+  const c = luckCost(); if (S.coin < c) { toast(`샤드가 부족해요 (${fmt(c)} 필요)`); AU.tone(200, .15, 'square', .04); return; }
+  S.coin -= c; S.luckBuy++; AU.tone(784, .2, 'triangle', .06); AU.coin(); save(); updHUD(); refreshSheet();
+}
+function ascend() {
+  if (S.sinceAsc < ASC_NEED) return;
+  S.asc++; S.sinceAsc = 0; S.coin = 0; S.luckBuy = 0; S.luckBonus = 0; S.destiny = 0;
+  save(); closeSheet(); updHUD(); checkQuests();
+  banner(`초월 ${S.asc}회`, 'ASCENSION', '#ffffff', `영구 행운 ${fmtX(ascMult())} · 새로운 여정이 시작됩니다`);
+  AU.boom(); AU.chime(8); [523, 659, 784, 1047, 1319].forEach((f, i) => AU.tone(f, .8, 'triangle', .07, null, i * .12));
+  if (!S.set.motion) { CAM.flash = .9; CAM.fc = '#ffffff'; CAM.shake = 14; } buzz([60, 40, 120]); fireworks(6);
+}
 function pLuck() {
-  openSheet('행운 상세', b => {
-    const L = luckParts();
-    b.appendChild(h(`<div class="card now" style="--bc:#8a6cff"><small>현재 행운</small><b>${fmtX(L.total)}</b><p class="dim">기본 1 + 더하기 보너스, 그 위에 곱하기 보너스가 붙어요.</p></div>
-      <div class="logl">${L.parts.length ? L.parts.map(([n, v]) => `<div><b>${n}</b><span style="color:#ffd36a;font-size:13px">${v}</span></div>`).join('') : '<p class="dim center">아직 보너스가 없어요</p>'}</div>
+  openSheet('행운', b => {
+    const L = luckParts(), c = luckCost(), ok = S.coin >= c, left = Math.max(0, ASC_NEED - S.sinceAsc);
+    b.appendChild(h(`<div class="card now" style="--bc:#8a6cff"><small>현재 행운</small><b>${fmtX(L.total)}</b><p class="dim">기본 1 + 더하기 보너스, 그 위에 곱하기 보너스가 붙어요.</p></div>`));
+    const buy = h(`<div class="card"><div class="crow">${icon('clover', '#7be08a', 36)}<div class="cmain"><b>행운 구매</b><small>영구 행운 +20% · 지금까지 ${S.luckBuy}회 (+${fmt(S.luckBuy * 20)}%)</small></div></div><button class="btn gold ${ok ? '' : 'off'}">${coinI(14)} ${fmt(c)} 샤드로 +0.2 행운</button></div>`);
+    buy.querySelector('button').onclick = buyLuck; b.appendChild(buy);
+    const asc = h(`<div class="card ascc"><div class="crow">${icon('star', '#ffffff', 36)}<div class="cmain"><b>초월 <span class="dim">· ${S.asc}회</span></b><small>지금 ${fmtX(ascMult())} → 초월하면 <b style="display:inline;font-size:12px;color:#fff">${fmtX(1 + (S.asc + 1) * .5)}</b> (곱하기)</small></div></div>
+      <div class="pbar"><i style="width:${Math.min(100, S.sinceAsc / ASC_NEED * 100)}%"></i></div>
+      <p class="dim" style="font-size:12px">마지막 초월 후 ${fmt(Math.min(S.sinceAsc, ASC_NEED))}/${ASC_NEED}회 굴림 · 초월하면 <b style="color:#ff9aaa">샤드 · 구매한 행운 · 코드 행운 · 천장</b>이 초기화돼요. 오라·도감·장비·물약·레벨은 그대로예요.</p>
+      <button class="btn ${left ? 'off' : ''}" id="ascBtn">${left ? `초월까지 ${left}회` : '✦ 초월하기'}</button></div>`);
+    asc.querySelector('#ascBtn').onclick = e => {
+      if (left) return; const bt = e.currentTarget;
+      if (bt.dataset.arm) return ascend();
+      bt.dataset.arm = 1; bt.textContent = '한 번 더 누르면 초월해요'; bt.classList.add('gold'); setTimeout(() => { if (bt.isConnected) { delete bt.dataset.arm; bt.textContent = '✦ 초월하기'; bt.classList.remove('gold'); } }, 3000);
+    };
+    b.appendChild(asc);
+    b.appendChild(h(`<h3 class="sub">행운 구성</h3><div class="logl">${L.parts.length ? L.parts.map(([n, v]) => `<div><b>${n}</b><span style="color:#ffd36a;font-size:13px">${v}</span></div>`).join('') : '<p class="dim center">아직 보너스가 없어요</p>'}</div>
       <h3 class="sub">그 밖의 수치</h3><div class="logl">
       <div><b>${bonusEvery()}번째 굴림</b><span>행운 ×${tenthMult()}</span></div>
       <div><b>굴림 속도</b><span>${fmtX(speed())}</span></div>
-      <div><b>운명 게이지</b><span>${S.destiny}/${DESTINY_MAX} · 가득 차면 행운 ×50 + 레어 확정</span></div>
+      <div><b>천장</b><span>${S.destiny}/${PITY_MAX} · 가득 차면 행운 ×50 + 에픽 이상 확정</span></div>
+      <div><b>희귀 배율</b><span>레전더리 이상 ${fmtX(rarityMul())}</span></div>
       <div><b>콤보</b><span>연속으로 굴릴 때마다 +1% (최대 +50%)</span></div>
       <div><b>빛나는 변이 확률</b><span>1 / ${fmt(1 / shinyChance())}</span></div>
-      <div><b>굴림당 주화</b><span>커먼 ${fmt(coinMul())} · 레전더리 ${fmt(17 * coinMul())}</span></div>
+      <div><b>굴림당 샤드</b><span>커먼 ${fmt(coinMul())} · 레전더리 ${fmt(30 * coinMul())} · 미식 ${fmt(80 * coinMul())}</span></div>
       <div><b>지금 시간</b><span>${isNight() ? '☾ 밤' : '☀ 낮'} · ${mmss(dayLeft())} 남음</span></div></div>`));
   });
 }
 
 /* ── 설정 ── */
+const ACC_KEY = 'voidroll_renewal_account';
 function pSet() {
   openSheet('설정', b => {
-    const best = S.best ? AMAP[S.best] : null, pm = Math.floor(S.stats.play / 60);
-    b.appendChild(h(`<div class="stgrid"><div><small>총 굴림</small><b>${fmt(S.rolls)}</b></div><div><small>발견한 오라</small><b>${found(S)}/${AURAS.length}</b></div><div><small>최고 기록</small><b style="color:${best ? best.c : '#fff'}">${best ? best.n : '-'}</b></div><div><small>플레이 시간</small><b>${Math.floor(pm / 60)}시간 ${pm % 60}분</b></div><div><small>빛나는 오라</small><b class="rainbow">${S.stats.shinies}개</b></div><div><small>모은 주화</small><b>${fmt(S.stats.coins)}</b></div></div>`));
-    if (S.log.length) b.appendChild(h(`<h3 class="sub">최근 희귀 획득</h3><div class="logl">${S.log.slice(0, 10).map(l => { const a = AMAP[l.id]; return a ? `<div>${orbCSS(a, 16, l.sh)}<b style="color:${a.c}">${l.sh ? '✦' : ''}${a.n}</b><span class="dim">1/${fmt(a.r)} · ${fmt(l.n)}번째 · ${BIOMES[l.b].n}</span></div>` : ''; }).join('')}</div>`));
+    const best = S.best ? AMAP[S.best] : null, pm = Math.floor(S.stats.play / 60), R = ADMIN_ROLES[S.role];
+    b.appendChild(h(`<div class="card prof"><div class="crow">${S.eq ? orbCSS(AMAP[S.eq], 40, S.eqShiny) : '<span class="morb q">?</span>'}<div class="cmain"><b>${esc(S.nick || '이름 없음')}</b><small>Lv.${S.lv} · 초월 ${S.asc}회${R ? ` · <span style="color:#ffd36a">${R.n}</span>` : ''}</small></div><button class="btn sm ghost" id="nickBtn">이름 변경</button></div>${R ? '<button class="btn gold" id="admBtn">관리자 콘솔 열기</button>' : ''}</div>`));
+    b.appendChild(h(`<div class="stgrid"><div><small>총 굴림</small><b>${fmt(S.rolls)}</b></div><div><small>발견한 오라</small><b>${found(S)}/${AURAS.length}</b></div><div><small>최고 기록</small><b style="color:${best ? best.c : '#fff'}">${best ? best.n : '-'}</b></div><div><small>플레이 시간</small><b>${Math.floor(pm / 60)}시간 ${pm % 60}분</b></div><div><small>빛나는 오라</small><b class="rainbow">${S.stats.shinies}개</b></div><div><small>모은 샤드</small><b>${fmt(S.stats.coins)}</b></div><div><small>스킬 사용</small><b>${fmt(S.stats.skills)}회</b></div><div><small>×10 굴림</small><b>${fmt(S.stats.x10)}회</b></div></div>`));
+    if (S.log.length) b.appendChild(h(`<h3 class="sub">최근 희귀 획득</h3><div class="logl">${S.log.slice(0, 10).map(l => { const a = AMAP[l.id]; return a ? `<div>${orbCSS(a, 16, l.sh)}<b style="color:${a.c}">${l.sh ? '✦' : ''}${a.n}</b><span class="dim">1/${fmt(a.r)} · ${fmt(l.n)}번째 · ${(BIOMES[l.b] || BIOMES.normal).n}</span></div>` : ''; }).join('')}</div>`));
     const row = (label, ctl) => `<div class="setrow"><span>${label}</span>${ctl}</div>`;
     const tg = k => `<button class="tg ${S.set[k] ? 'on' : ''}" data-k="${k}"><i></i></button>`;
     b.appendChild(h(`<h3 class="sub">옵션</h3>
       ${row('효과음', tg('sound'))}${row('배경 음악', tg('music'))}${row('진동', tg('haptic'))}
-      ${row('더 희귀한 오라 자동 장착', tg('autoEq'))}${row('빠른 굴림 (에픽 미만 연출 단축)', tg('quick'))}${row('저사양 모드', tg('low'))}
+      ${row('더 희귀한 오라 자동 장착', tg('autoEq'))}${row('빠른 굴림 (에픽 미만 연출 단축)', tg('quick'))}${row('자동 굴림을 ×10으로', tg('auto10'))}
+      ${row('화면 흔들림·번쩍임 줄이기', tg('motion'))}${row('저사양 모드', tg('low'))}
       ${row('컷신 재생', `<select id="cutSel"><option value="3">에픽 이상</option><option value="4">레전더리 이상</option><option value="5">미식 이상</option><option value="6">엑절티드 이상</option><option value="99">끄기</option></select>`)}
+      <p class="hint">오라마다 컷신을 끄려면 도감에서 오라를 눌러 설정하세요.</p>
+      <h3 class="sub">코드</h3>
+      <div class="coderow"><input id="codeIn" class="tin" placeholder="코드 입력" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn sm" id="codeBtn">사용</button></div>
+      <p class="hint">사용한 코드 ${Object.keys(S.codes).length}개 · 원작 VOIDROLL의 코드를 그대로 쓸 수 있어요.</p>
       <h3 class="sub">저장</h3>
       <div class="brow2"><button class="btn sm" id="expBtn">저장 코드 복사</button><button class="btn sm ghost" id="impBtn">코드로 불러오기</button></div>
       <textarea id="saveTxt" class="hide" spellcheck="false"></textarea>
+      <details class="mast cloud"><summary>☁ 계정 전체 세이브 (서버)</summary>
+        <p class="dim" style="font-size:12px;line-height:1.6">원작 v25와 같은 방식이에요. 직접 띄운 세이브 서버 주소를 넣고 계정을 만든 뒤 저장하세요. (POST /accounts · PUT·GET /accounts/:id, Bearer 토큰)</p>
+        <input id="cEp" class="tin sm" placeholder="https://내-서버/api" spellcheck="false"><input id="cId" class="tin sm" placeholder="계정 ID" spellcheck="false"><input id="cTk" class="tin sm" placeholder="보안 토큰" spellcheck="false" type="password">
+        <button class="btn sm ghost wide" id="cNew">새 계정 만들기</button>
+        <div class="brow2"><button class="btn sm" id="cSave">서버에 저장</button><button class="btn sm ghost" id="cLoad">서버에서 불러오기</button></div>
+      </details>
+      <div class="brow2"><button class="btn sm ghost" id="linkBtn">게임 링크 복사</button><button class="btn sm ghost" id="pwaBtn">홈 화면에 설치</button></div>
       <button class="btn danger" id="resetBtn">처음부터 다시 하기</button>
-      <p class="hint">VOIDROLL : RENEWAL · 진행 상황은 이 기기 브라우저에 자동 저장돼요.</p>`));
+      <p class="hint">VOIDROLL : RENEWAL · 원작 VOIDROLL의 모든 오라·시스템 포함 · 진행 상황은 이 기기 브라우저에 자동 저장돼요.</p>`));
     b.querySelectorAll('.tg').forEach(x => x.onclick = () => { const k = x.dataset.k; S.set[k] = !S.set[k]; if (k === 'low') resize(); if (k === 'sound' && S.set.sound) AU.init(); save(); AU.ui(); updHUD(); refreshSheet(); });
     const sel = b.querySelector('#cutSel'); sel.value = String(S.set.cut); sel.onchange = () => { S.set.cut = +sel.value; save(); };
+    b.querySelector('#nickBtn').onclick = () => pNick(false);
+    const ab = b.querySelector('#admBtn'); if (ab) ab.onclick = () => pAdmin();
+    const ci = b.querySelector('#codeIn');
+    b.querySelector('#codeBtn').onclick = () => { redeem(ci.value); ci.value = ''; };
+    ci.addEventListener('keydown', e => { if (e.key === 'Enter') { redeem(ci.value); ci.value = ''; } });
     const ta = b.querySelector('#saveTxt');
     b.querySelector('#expBtn').onclick = () => {
       const code = btoa(unescape(encodeURIComponent(JSON.stringify(S)))); ta.value = code; ta.classList.remove('hide'); ta.select();
-      (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => toast('저장 코드를 복사했어요'), () => toast('코드를 길게 눌러 복사하세요'));
+      copyText(code, '저장 코드를 복사했어요', '코드를 길게 눌러 복사하세요');
     };
     b.querySelector('#impBtn').onclick = () => {
       if (ta.classList.contains('hide') || !ta.value.trim()) { ta.value = ''; ta.placeholder = '여기에 저장 코드를 붙여넣고 다시 누르세요'; ta.classList.remove('hide'); ta.focus(); return; }
       try { const d = JSON.parse(decodeURIComponent(escape(atob(ta.value.trim())))); if (d.v !== 1) throw 0; localStorage.setItem(SAVE_KEY, JSON.stringify(d)); location.reload(); }
       catch (e) { toast('올바르지 않은 코드예요'); }
     };
+    cloudUI(b);
+    b.querySelector('#linkBtn').onclick = () => copyText(gameLink(), '게임 링크를 복사했어요', gameLink());
+    const pb = b.querySelector('#pwaBtn');
+    pb.onclick = async () => {
+      if (PWA.ev) { PWA.ev.prompt(); try { await PWA.ev.userChoice; } catch (e) { } PWA.ev = null; refreshSheet(); }
+      else toast(window.matchMedia('(display-mode: standalone)').matches ? '이미 앱으로 실행 중이에요' : '브라우저 메뉴의 <b>홈 화면에 추가</b>를 눌러 설치하세요');
+    };
     b.querySelector('#resetBtn').onclick = e => { const bt = e.currentTarget; if (bt.dataset.arm) { try { localStorage.removeItem(SAVE_KEY); } catch (er) { } location.reload(); return; } bt.dataset.arm = 1; bt.textContent = '한 번 더 누르면 모든 진행이 지워져요'; setTimeout(() => { if (bt.isConnected) { delete bt.dataset.arm; bt.textContent = '처음부터 다시 하기'; } }, 3000); };
+  });
+}
+function copyText(t, ok, fail) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast(ok), () => toast(fail)); }
+function gameLink() { return /^https?:$/.test(location.protocol) && !/claude|anthropic|usercontent/.test(location.hostname) ? location.origin + location.pathname : 'https://github.com/hookite-ops/voidroll'; }
+function cloudUI(b) {
+  let acc = {}; try { acc = JSON.parse(localStorage.getItem(ACC_KEY) || '{}'); } catch (e) { }
+  const ep = b.querySelector('#cEp'), id = b.querySelector('#cId'), tk = b.querySelector('#cTk');
+  ep.value = acc.endpoint || ''; id.value = acc.id || ''; tk.value = acc.token || '';
+  const A = () => ({ endpoint: ep.value.trim().replace(/\/$/, ''), id: id.value.trim(), token: tk.value.trim() });
+  const keep = a => { try { localStorage.setItem(ACC_KEY, JSON.stringify(a)); } catch (e) { } };
+  const okEp = a => { if (!/^https?:\/\//.test(a.endpoint)) { toast('서버 주소를 입력하세요 (https://…)'); return false; } return true; };
+  b.querySelector('#cNew').onclick = async () => {
+    const a = A(); if (!okEp(a)) return;
+    try { const r = await fetch(a.endpoint + '/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: S.nick || 'player' }) }); const d = await r.json(); if (!r.ok || !d.accountId) throw 0; id.value = d.accountId; tk.value = d.token; keep(A()); toast('계정을 만들었어요. 토큰은 이 기기에 보관돼요.'); }
+    catch (e) { toast('계정 생성 실패 · 서버 주소와 CORS 설정을 확인하세요'); }
+  };
+  b.querySelector('#cSave').onclick = async () => {
+    const a = A(); if (!okEp(a)) return; if (!a.id || !a.token) { toast('먼저 계정을 만들거나 ID·토큰을 입력하세요'); return; }
+    try { save(); const r = await fetch(a.endpoint + '/accounts/' + encodeURIComponent(a.id), { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + a.token }, body: JSON.stringify({ game: S, summer: S.sum }) }); if (!r.ok) throw 0; keep(a); toast('☁ 서버에 저장했어요'); }
+    catch (e) { toast('저장 실패 · 서버 주소와 토큰을 확인하세요'); }
+  };
+  b.querySelector('#cLoad').onclick = async () => {
+    const a = A(); if (!okEp(a)) return; if (!a.id || !a.token) { toast('계정 ID와 토큰을 입력하세요'); return; }
+    try { const r = await fetch(a.endpoint + '/accounts/' + encodeURIComponent(a.id), { headers: { Authorization: 'Bearer ' + a.token } }); const d = await r.json(); if (!r.ok || !d.game || d.game.v !== 1) throw 0; localStorage.setItem(SAVE_KEY, JSON.stringify(d.game)); keep(a); toast('☁ 불러왔어요 · 새로고침할게요'); setTimeout(() => location.reload(), 900); }
+    catch (e) { toast('불러오기 실패 · 서버 주소와 토큰을 확인하세요'); }
+  };
+}
+const PWA = { ev: null };
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); PWA.ev = e; });
+
+/* ════════ 원작 시스템 ════════ */
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/* 스킬 — 원작의 '천장 -N'(천장 감소)은 리뉴얼 천장 게이지에 맞게 '천장 +N'(게이지 충전)으로 */
+for (const a of AURAS) {
+  const k = a.sk; if (!k || k.fixed) continue; k.fixed = 1;
+  k.d = k.d.replace(/천장 -(\d+)/g, '천장 +$1').replace(/천장 리셋/g, '천장 가득 채우기');
+  const m1 = k.d.match(/([\d,]+)\s*샤드/) || k.d.match(/샤드 ([\d,]+)개/); k.sh = m1 ? +m1[1].replace(/,/g, '') : 0;
+  const m2 = k.d.match(/재료 (?:각 )?\+?(\d+)/); k.mt = m2 ? +m2[1] : 0;
+  const m3 = k.d.match(/롤 (\d+)회/); k.qr = m3 ? +m3[1] : 0;
+  const m4 = k.d.match(/천장 \+(\d+)/); k.pt = m4 ? +m4[1] : 0;
+}
+function updSkill() {
+  const b = $('#skillBtn'), a = S.eq ? AMAP[S.eq] : null;
+  if (!a || !started) { b.classList.add('hide'); return; }
+  b.classList.remove('hide');
+  const left = Math.max(0, ((S.skCd[a.id] || 0) - Date.now()) / 1000);
+  b.style.setProperty('--ac', a.c); b.style.setProperty('--ag', rgba(a.c, .45)); b.style.setProperty('--k', Math.min(1, left / a.sk.cd).toFixed(3));
+  b.classList.toggle('ready', left <= 0);
+  const html = `<i>${a.sym}</i><small>${left > 0 ? mmss(left) : esc(a.sk.n)}</small>`;
+  if (b._h !== html) { b.innerHTML = html; b._h = html; }
+}
+function useSkill() {
+  const a = S.eq ? AMAP[S.eq] : null; if (!a || !started || CUT.on) return;
+  const k = a.sk, now = Date.now();
+  if ((S.skCd[a.id] || 0) > now) { toast(`<b>${k.n}</b> · ${k.d}<br><span class="dim">다시 쓰려면 ${mmss((S.skCd[a.id] - now) / 1000)}</span>`); AU.tone(200, .12, 'square', .04); return; }
+  S.skCd[a.id] = now + k.cd * 1000; S.stats.skills++;
+  let weak = false;
+  const buff = (key, v, du) => { const c = S.skb[key]; if (c && c.end > now && c.v > v) { weak = true; return; } S.skb[key] = { v, end: now + du * 1000, n: k.n }; };
+  const shards = n => { if (n > 0) { S.coin += n; S.stats.coins += n; flyCoins(W / 2, H * .38, Math.min(16, 4 + Math.round(Math.log10(n) * 3))); } };
+  const pity = n => { S.destiny = Math.min(PITY_MAX, S.destiny + n); };
+  switch (k.ef) {
+    case 'speed': buff('speed', 1 + k.v, k.du); break;
+    case 'rarity': buff('rarity', k.v, k.du); break;
+    case 'god': buff('luck', 1 + k.v, k.du); buff('rarity', 5, k.du); shards(k.sh); break;
+    case 'ult': buff('luck', 1 + k.v, k.du); buff('speed', 2, k.du); shards(k.sh); break;
+    case 'shards': shards(k.v); break;
+    case 'pity': pity(k.pt || k.v); break;
+    case 'pityRoll': pity(k.pt); break;
+    case 'shardsPity': shards(k.v); pity(k.pt || 30); break;
+    case 'pityReset': S.destiny = PITY_MAX; shards(k.sh); break;
+    case 'genesis': { const n = k.mt || 5; for (const m of ['o_dust', 'o_frag', 'o_core', 'o_star', 'o_void']) S.mats[m] = (S.mats[m] || 0) + n; S.stats.mats += n * 5; shards(k.sh || 1000); break; }
+    default: buff('luck', 1 + k.v, k.du); shards(k.sh);
+  }
+  // 연출
+  const t = Math.min(8, tierOf(a.r)); AU.tone(587, .3, 'sawtooth', .08, 1174); AU.chime(Math.max(2, t)); buzz(30);
+  const { cx, by } = orbPos(); SHOW.joy = 1.2; SHOW.until = T + 1.5; SHOW.a = a;
+  for (let i = 0; i < 26 + t * 6; i++) SPARK.push({ x: cx, y: by, vx: rnd(-220, 220), vy: rnd(-420, -120), l: 0, m: rnd(.6, 1.2), c: pick([a.c, a.c2 || '#ffffff', '#ffffff']) });
+  if (!S.set.motion) { CAM.flash = .25; CAM.fc = a.c; }
+  floatChip(`${a.sym} ${k.n}`);
+  toast(`✦ 스킬 <b style="color:${mix(a.c, '#ffffff', .3)}">${k.n}</b> · ${k.d}${weak ? '<br><span class="dim">더 강한 같은 효과가 이미 켜져 있어 일부는 적용되지 않았어요</span>' : ''}`);
+  if (k.ef === 'pityRoll') setTimeout(() => quickRolls(k.qr || 3, `${k.n} · 즉시 ${k.qr || 3}회`), 350);
+  checkQuests(); save(); updHUD();
+}
+
+/* ×10 결과 */
+function showMulti(res, title = '×10 굴림') {
+  const el = $('#multi'), top = Math.max(...res.map(r => tierOf(r.a.r)));
+  el.innerHTML = `<div class="mh"><b>${title}</b><span>${coinI(13)} +${fmt(res.reduce((q, r) => q + r.coins, 0))}${res.some(r => r.isNew) ? ` · <i class="newTag">NEW ${res.filter(r => r.isNew).length}</i>` : ''}</span></div><div class="mg">${res.map((r, i) => `<div class="mc" style="--tc:${tierColor(r.a)};animation-delay:${i * .045}s">${orbCSS(r.a, 24, r.shiny)}<b style="color:${mix(r.a.c, '#ffffff', .35)}">${r.shiny ? '✦' : ''}${r.a.n}</b><small>${tierLabel(r.a)}</small>${r.isNew ? '<em>NEW</em>' : ''}</div>`).join('')}</div>`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(showMulti.tm); showMulti.tm = setTimeout(() => el.classList.remove('show'), 2800 + Math.min(top, 8) * 220);
+}
+
+/* 불꽃놀이 */
+function fireworks(n = 10) {
+  for (let i = 0; i < n; i++) setTimeout(() => {
+    const x = rnd(W * .15, W * .85), y = rnd(H * .12, H * .4), c = pick(['#ffd65a', '#55e7ff', '#ff8fc7', '#7affb0', '#c8a8ff']);
+    for (let j = 0; j < 44; j++) { const an = j / 44 * TAU, sp = rnd(150, 290); SPARK.push({ x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp - 80, l: 0, m: rnd(.9, 1.5), c: j % 3 ? c : '#ffffff' }); }
+    AU.tone(rnd(500, 900), .5, 'triangle', .05, rnd(1200, 1800)); AU.noise(.4, .1, 3000, 400, 0, 'lowpass'); buzz(12);
+  }, i * 380);
+}
+
+/* 여름 축제 (원작 SEASON 01 · ETERNAL TIDE FESTIVAL) */
+const SUM_AURAS = AURAS.filter(a => a.summer);
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+const sumMissionVal = m => ({ rolls: S.sum.rolls, rare: S.sum.rare, total: S.sum.total, owned: S.sum.owned.length })[m.key] || 0;
+function sumAlert() { const m = S.sum; return m.lastDaily !== todayKey() || m.sun >= 45 && m.owned.length < SUM_AURAS.length || SUMMER_MISSIONS.some(x => !m.claimed[x.id] && sumMissionVal(x) >= x.target); }
+function sumGain(n) { S.sum.sun += n; S.sum.total += n; }
+function pSummer() {
+  openSheet('여름 축제', b => {
+    const m = S.sum, today = todayKey(), own = m.owned.length;
+    b.appendChild(h(npcHead('marina')));
+    b.appendChild(h(`<div class="sumhead"><small>SEASON 01 · ETERNAL TIDE FESTIVAL</small><b>☀ ${fmt(m.sun)} SUN</b><p>굴림 10회마다 +5 SUN · 굴릴 때 1% 확률로 +10 SUN</p><div class="pbar sea"><i style="width:${m.rolls % 10 * 10}%"></i></div><p class="dim">파도 ${m.rolls % 10}/10 · 티켓 ${m.tickets}장 · 별조각 ${m.frag}개 · 여름 아우라 ${own}/${SUM_AURAS.length}</p></div>`));
+    const acts = h(`<div class="sumacts"></div>`).firstChild;
+    const add = (html, cls, fn, off) => { const x = h(`<button class="btn ${cls} ${off ? 'off' : ''}">${html}</button>`).firstChild; x.onclick = fn; acts.appendChild(x); };
+    if (m.lastDaily !== today) add('☀ 일일 보너스 +25 SUN 받기', 'gold', () => { m.lastDaily = today; sumGain(25); AU.coin(); AU.chime(3); toast('☀ 일일 보너스 +25 SUN'); save(); updHUD(); refreshSheet(); });
+    add(`≋ 여름 균열 열기 <small>45 SUN · 새 여름 아우라 확정</small>`, 'sea', sumRift, m.sun < 45 || own >= SUM_AURAS.length);
+    add(`${icon('ticket', '#2a1600', 16)} 파도 티켓 사용 <small>${m.tickets}장 · 다음 굴림 레어 이상 + 45초 희귀 ×4</small>`, 'gold', sumTicket, !m.tickets);
+    if (m.frag >= 3) add('⭐ 별조각 3개 → 40 SUN 교환', 'ghost', () => { m.frag -= 3; sumGain(40); AU.coin(); toast('⭐ 별조각 3개 → ☀ +40 SUN'); save(); updHUD(); refreshSheet(); });
+    if (!m.bought.compass) add(`${icon('compass', '#7fe8d6', 16)} 조개 나침반 켜기 <small>여름 아우라 1종당 영구 행운 +2%</small>`, 'ghost', () => { if (!own) { toast('먼저 여름 아우라를 얻으세요'); return; } m.bought.compass = 1; AU.chime(4); toast(`조개 나침반 · 행운 +${own * 2}% (아우라가 늘면 함께 올라요)`); save(); updHUD(); refreshSheet(); }, !own);
+    add(own >= 4 ? '🎇 불꽃 해변 피날레' : `🎇 피날레 <small>여름 아우라 ${4 - own}종 더 필요</small>`, 'ghost', () => {
+      if (own < 4) return; closeSheet(); setBiome('beach', 60, true); banner('불꽃 해변 피날레', 'SUMMER FINALE', '#ffd65a', `여름 아우라 ${own}종과 함께`); fireworks(14); AU.chime(7);
+      if (!m.finale) { m.finale = 1; sumGain(50); setTimeout(() => toast('첫 피날레 기념 · ☀ +50 SUN'), 1200); save(); updHUD(); }
+    }, own < 4);
+    b.appendChild(acts);
+    b.appendChild(h(`<h3 class="sub">여름 아우라 <span class="dim">${own}/${SUM_AURAS.length}</span></h3><div class="sumgrid">${SUM_AURAS.map(a => { const o = m.owned.includes(a.id) || S.found[a.id]; return `<div class="${o ? '' : 'lock'}">${o ? orbCSS(a, 26) : '<span class="morb q" style="width:26px;height:26px;line-height:24px">?</span>'}<span>${o ? a.n : '???'}</span></div>`; }).join('')}</div>`));
+    b.appendChild(h('<h3 class="sub">축제 미션</h3>'));
+    for (const x of SUMMER_MISSIONS) {
+      const v = sumMissionVal(x), done = v >= x.target, c = m.claimed[x.id];
+      const d = h(`<div class="card q ${c ? 'claimed' : done ? 'ready' : ''}"><div class="crow"><div class="cmain"><b>${x.n}</b><small>${x.d}</small></div>${c ? '<span class="own">완료</span>' : `<span class="own sun">☀ ${x.rw}</span>`}</div>${c ? '' : `<div class="pbar sea"><i style="width:${Math.min(100, v / x.target * 100)}%"></i></div><div class="qmeta"><span class="dim">${fmt(Math.min(v, x.target))} / ${fmt(x.target)}</span></div>`}${done && !c ? '<button class="btn sea">SUN 받기</button>' : ''}</div>`);
+      const bt = d.querySelector('button'); if (bt) bt.onclick = () => { m.claimed[x.id] = 1; m.sun += x.rw; AU.chime(4); AU.coin(); toast(`☀ +${x.rw} SUN`); save(); updHUD(); refreshSheet(); };
+      b.appendChild(d);
+    }
+    b.appendChild(h('<h3 class="sub">축제 상점</h3>'));
+    for (const it of SUMMER_SHOP) {
+      const got = !it.repeat && m.bought[it.id], ok = !got && m.sun >= it.p;
+      const d = h(`<div class="card ${got ? 'eqd' : ''}"><div class="crow">${icon(it.id.startsWith('ticket') ? 'ticket' : it.id === 'aura' ? 'sun' : it.id === 'frag' ? 'star' : it.id === 'charm' ? 'shell' : 'sun', it.id === 'glow' ? '#ff9a6a' : '#55e7ff', 34)}<div class="cmain"><b>${it.n}</b><small>${it.d}</small></div>${got ? '<span class="own on">보유</span>' : ''}</div>${got ? '' : `<button class="btn sea ${ok ? '' : 'off'}">☀ ${it.p} SUN</button>`}</div>`);
+      const bt = d.querySelector('button'); if (bt) bt.onclick = () => sumBuy(it);
+      b.appendChild(d);
+    }
+  });
+}
+function sumRift() {
+  const m = S.sum; if (m.sun < 45) { toast('☀ SUN이 45개 필요해요'); AU.tone(200, .15, 'square', .04); return; }
+  const pool = SUM_AURAS.filter(a => !m.owned.includes(a.id)); if (!pool.length) { toast('모든 여름 아우라를 모았어요!'); return; }
+  if (RS.on || CUT.on) return;
+  m.sun -= 45; m.rifts++; const a = pick(pool); m.owned.push(a.id);
+  const isNew = !S.found[a.id]; grant(a, false); save(); checkQuests(); updHUD(); closeSheet();
+  setBiome('beach', 60, true);
+  playCut(a, { isNew, label: '≋ 여름 균열 ≋', env: 'beach', auto: false }, () => { showResult(a, isNew, false); renderRecent(); banner('여름 해변', 'SUMMER BEACH', '#55e7ff', '1분 동안 해변이 열려요'); });
+}
+function sumTicket() {
+  const m = S.sum; if (!m.tickets) { toast('티켓이 없어요 · 축제 상점에서 살 수 있어요'); return; }
+  m.tickets--; m.force = true; m.rareUntil = Date.now() + 45000; AU.chime(4); AU.tone(660, .4, 'sine', .08, 1320);
+  toast(`${icon('ticket', '#55e7ff', 18)} 파도 티켓 · 다음 굴림 레어 이상 확정 · 45초간 희귀 ×4`); save(); updHUD(); refreshSheet();
+}
+function sumBuy(it) {
+  const m = S.sum; if (!it.repeat && m.bought[it.id]) return;
+  if (m.sun < it.p) { toast('SUN이 부족해요'); AU.tone(200, .15, 'square', .04); return; }
+  m.sun -= it.p;
+  if (it.id === 'ticket' || it.id === 'ticket5') m.tickets += it.qty; else if (it.id === 'frag') m.frag++; else m.bought[it.id] = 1;
+  AU.coin(); AU.get(); toast(`☀ <b>${it.n}</b> 구매`); save(); updHUD(); refreshSheet();
+}
+
+/* 코드 · 관리자 */
+function redeem(raw) {
+  const c = String(raw || '').trim().toUpperCase(); if (!c) return;
+  const role = Object.entries(ADMIN_ROLES).find(([, r]) => r.code === c);
+  if (role) { S.role = role[0]; save(); AU.chime(5); toast(`권한 확인 · <b>${role[1].n}</b>`); refreshSheet(); return; }
+  const C = CODES[c]; if (!C) { toast('존재하지 않는 코드예요'); AU.tone(200, .15, 'square', .04); return; }
+  if (S.codes[c]) { toast('이미 사용한 코드예요'); return; }
+  S.codes[c] = 1;
+  if (C.shards) { S.coin += C.shards; S.stats.coins += C.shards; }
+  if (C.luck) S.luckBonus += C.luck;
+  for (const m in C.mats || {}) { S.mats[m] = (S.mats[m] || 0) + C.mats[m]; S.stats.mats += C.mats[m]; }
+  if (C.admin && (!ADMIN_ROLES[S.role] || ADMIN_ROLES[S.role].lv < ADMIN_ROLES[C.admin].lv)) S.role = C.admin;
+  AU.chime(4); AU.coin(); toast(`코드 사용 · <b>${C.msg}</b>`); save(); checkQuests(); updHUD(); refreshSheet();
+}
+const roleLv = () => (ADMIN_ROLES[S.role] || { lv: 0 }).lv;
+const ADMIN_TOOLS = [
+  [1, '샤드 +1,000', () => { S.coin += 1000; }],
+  [1, '천장 가득 채우기', () => { S.destiny = PITY_MAX; }],
+  [1, '스킬 쿨타임 초기화', () => { S.skCd = {}; }],
+  [2, '여름 SUN +100', () => sumGain(100)],
+  [2, '파도 티켓 +5', () => { S.sum.tickets += 5; }],
+  [2, '별똥별 부르기', () => { starNext = 0; }],
+  [2, '떠돌이 상인 부르기', () => { S.mer.until = 0; S.mer.next = 0; tickMerchant(); }],
+  [2, '황금 상자 소환', () => spawnChest('gold')],
+  [3, '영구 행운 +10', () => { S.luckBonus += 10; }],
+  [3, '원작 재료 각 +20', () => { for (const m of ['o_dust', 'o_frag', 'o_core', 'o_star', 'o_void']) S.mats[m] = (S.mats[m] || 0) + 20; }],
+  [3, '모든 날씨 재료 +20', () => { for (const m in MATS) if (!m.startsWith('o_')) S.mats[m] = (S.mats[m] || 0) + 20; }],
+  [3, '×10 굴림 해금', () => { S.x10 = true; }],
+  [4, '샤드 +100,000', () => { S.coin += 100000; }],
+  [4, '초월 +1', () => { S.asc++; }],
+  [4, '상점 물약 모두 +3', () => { for (const id in POTIONS) if (POTIONS[id].shop) S.pots[id] = (S.pots[id] || 0) + 3; }],
+  [5, '원작 장비 모두 지급', () => { for (const e of EQUIP) S.equip[e.id] = 1; }],
+  [5, '모든 오라 1개씩 발견', () => { for (const a of AURAS) if (!S.found[a.id]) { S.found[a.id] = 1; S.auras[a.id] = (S.auras[a.id] || 0) + 1; } }],
+];
+function pAdmin() {
+  const lv = roleLv(); if (!lv) return;
+  openSheet('관리자 콘솔', b => {
+    const R = ADMIN_ROLES[S.role];
+    b.appendChild(h(`<div class="npc"><div class="adico">⚙</div><div><b>${R.n}</b><small>권한 Lv.${R.lv}</small><p>“${pick(NPCS.admin.lines)}” 등급이 높을수록 더 많은 도구를 쓸 수 있어요.</p></div></div>`));
+    const g = h('<div class="adm"></div>').firstChild;
+    for (const [need, n, fn] of ADMIN_TOOLS) {
+      const x = h(`<button class="btn ${lv >= need ? '' : 'off'}">${n}<small>Lv.${need}+</small></button>`).firstChild;
+      x.onclick = () => { if (lv < need) { toast(`Lv.${need} 이상 권한이 필요해요`); return; } fn(); AU.get(); toast(`관리자 · ${n}`); save(); checkQuests(); updHUD(); refreshSheet(); };
+      g.appendChild(x);
+    }
+    b.appendChild(g);
+    const wx = h(`<h3 class="sub">날씨 바꾸기 <span class="dim">Lv.1+</span></h3><div class="coderow"><select id="admB" class="grow">${Object.entries(BIOMES).map(([k, x]) => `<option value="${k}">${x.n}</option>`).join('')}</select><button class="btn sm">적용</button></div>`);
+    wx.querySelector('select').value = S.biome;
+    wx.querySelector('button').onclick = () => { const k = wx.querySelector('select').value; if (k === 'void') S.gateOpen = true; setBiome(k, k === 'beach' ? 60 : null); closeSheet(); };
+    b.appendChild(wx);
+    if (lv >= 4) {
+      const ax = h(`<h3 class="sub">오라 지급 <span class="dim">Lv.4+</span></h3><div class="coderow"><select id="admA" class="grow">${SORTED.map(a => `<option value="${a.id}">${a.n} · ${tierLabel(a)} · 1/${fmt(a.r)}</option>`).join('')}</select><button class="btn sm">지급</button></div>`);
+      ax.querySelector('button').onclick = () => { const a = AMAP[ax.querySelector('select').value]; const isNew = !S.found[a.id]; grant(a, false); save(); updHUD(); closeSheet(); playCut(a, { isNew, label: '관리자 지급', auto: false }, () => { showResult(a, isNew, false); renderRecent(); }); };
+      b.appendChild(ax);
+    }
+    const off = h('<button class="btn danger">권한 해제</button>').firstChild; off.onclick = () => { S.role = 'none'; save(); closeSheet(); toast('관리자 권한을 해제했어요'); }; b.appendChild(off);
+  }, true);
+}
+
+/* 닉네임 */
+function pNick(first) {
+  openSheet(first ? '이름을 정해주세요' : '이름 변경', b => {
+    b.appendChild(h(`${first ? npcHead('quill') : ''}<p class="center dim">2~12자 · 도감과 기록에 남는 이름이에요</p><input id="nickIn" class="tin big" maxlength="12" value="${esc(S.nick)}" placeholder="운명술사" autocomplete="off" spellcheck="false"><button class="btn big" id="nickOk">확인</button>${first ? '<button class="btn ghost" id="nickSkip">나중에 정할게요</button>' : ''}`));
+    const inp = b.querySelector('#nickIn'), ok = () => {
+      const v = inp.value.replace(/\s+/g, ' ').trim();
+      if (v.length < 2 || v.length > 12) { toast('이름은 2~12자로 정해주세요'); AU.tone(200, .15, 'square', .04); return; }
+      S.nick = v; save(); updHUD(); AU.chime(3); closeSheet(); toast(`반가워요, <b>${esc(v)}</b>님!`); if (first) setTimeout(checkDaily, 500);
+    };
+    b.querySelector('#nickOk').onclick = ok; inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok(); });
+    const sk = b.querySelector('#nickSkip'); if (sk) sk.onclick = () => { closeSheet(); setTimeout(checkDaily, 400); };
+    setTimeout(() => { try { inp.focus(); } catch (e) { } }, 300);
   });
 }
 
@@ -1040,8 +1460,10 @@ function toast(html) {
 
 /* ── 입력 ── */
 $('#rollBtn').onclick = () => { AU.init(); startRoll(); };
-$('#autoBtn').onclick = () => { AU.init(); AU.ui(); RS.auto = !RS.auto; updHUD(); if (RS.auto) { wake(); startRoll(); } else unwake(); };
-$('#quickBtn').onclick = () => { AU.ui(); S.set.quick = !S.set.quick; save(); updHUD(); };
+$('#autoBtn').onclick = () => { AU.init(); AU.ui(); RS.auto = !RS.auto; updHUD(); if (RS.auto) { wake(); startRoll(S.set.auto10 && S.x10 ? 10 : 1); } else unwake(); };
+$('#x10Btn').onclick = () => { AU.init(); AU.ui(); startRoll(10); };
+$('#skillBtn').onclick = () => { AU.init(); useSkill(); };
+$('#sumBtn').onclick = () => { AU.init(); AU.ui(); pSummer(); };
 $('#merBtn').onclick = () => { AU.ui(); pLoc('merchant', false); };
 $('#luckBox').onclick = () => { AU.ui(); pLuck(); };
 document.querySelectorAll('#nav button').forEach(x => x.onclick = () => {
@@ -1059,6 +1481,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && RS
 let last = performance.now(), secAcc = 0;
 const HTEASE = new AuraFX(); HTEASE.hero = true; afx.hero = true;
 function frame(now) {
+  try { frameBody(now); } catch (e) { if (!frame.err) { frame.err = 1; console.error(e); } try { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; } catch (e2) { } }
+  requestAnimationFrame(frame);
+}
+function frameBody(now) {
   let dt = Math.min(.05, (now - last) / 1000); last = now;
   const rdt = dt; if (CAM.hit > 0) { CAM.hit -= dt; dt *= .05; }
   T += dt;
@@ -1125,13 +1551,14 @@ function frame(now) {
   secAcc += rdt;
   if (secAcc >= 1) {
     secAcc -= 1; S.stats.play++; tickBiome(); updBiomeTime(); tickDay(); tickMerchant();
-    let changed = false; for (const id in S.active) if (S.active[id] <= Date.now()) { delete S.active[id]; changed = true; }
-    if (changed || Object.keys(S.active).length || S.starBoost > Date.now() - 1500) updHUD();
+    let changed = false; const nw = Date.now();
+    for (const id in S.active) if (S.active[id] <= nw) { delete S.active[id]; changed = true; }
+    for (const k in S.skb) if (S.skb[k].end <= nw) { delete S.skb[k]; changed = true; }
+    if (changed || Object.keys(S.active).length || Object.keys(S.skb).length || S.starBoost > nw - 1500 || S.sum.rareUntil > nw - 1500) updHUD(); else updSkill();
     const o = $('#obsT'); if (o) o.textContent = mmss((S.biomeEnd - Date.now()) / 1000);
     const m = $('#merT'); if (m) m.textContent = mmss((S.mer.until - Date.now()) / 1000);
     if (S.stats.play % 5 === 0) save();
   }
-  requestAnimationFrame(frame);
 }
 
 /* ── 시작 ── */
@@ -1147,6 +1574,7 @@ $('#intro').addEventListener('click', () => {
   AU.init(); started = true; $('#intro').classList.add('gone'); setTimeout(() => $('#intro').remove(), 700);
   AU.tone(220, 1.2, 'sine', .15, 440); AU.chime(2);
   if (S.rolls === 0) setTimeout(() => toast('ROLL을 눌러 첫 오라를 굴려보세요. 하늘을 지나가는 <b>별똥별</b>은 눌러서 잡을 수 있어요!'), 700);
-  setTimeout(checkDaily, 900);
+  updHUD(); setTimeout(() => S.nick ? checkDaily() : pNick(true), 900);
 });
+try { if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic|usercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => { }); } catch (e) { }
 addEventListener('pagehide', save);

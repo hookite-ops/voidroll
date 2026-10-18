@@ -11,6 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,16 +21,18 @@
 <header id="top">
   <div class="lcol">
     <div class="biome" id="biomeChip"><i></i><b id="biomeName">평온</b><span id="biomeTime">0:00</span></div>
-    <div class="row2"><div class="daychip" id="dayChip">☀</div><button class="merbtn hide" id="merBtn"><span>3:00</span></button></div>
+    <div class="row2"><div class="daychip" id="dayChip">☀</div><button class="sumbtn" id="sumBtn">☀ <b id="sunVal">0</b></button><button class="merbtn hide" id="merBtn"><span>3:00</span></button></div>
   </div>
   <div class="stats">
     <button id="luckBox"><small>행운 ⓘ</small><b id="luckVal">×1.00</b></button>
     <div><small>속도</small><b id="spdVal">×1.00</b></div>
-    <div id="coinBox"><small>주화</small><b><i id="coinIco"></i><span id="coinVal">0</span></b></div>
+    <div id="coinBox"><small>샤드</small><b><i id="coinIco"></i><span id="coinVal">0</span></b></div>
   </div>
 </header>
-<div id="lvrow"><b class="lvb">Lv.<span id="lvNum">1</span></b><div class="lvtrack"><i id="lvBar"></i></div><small id="lvTxt">0/0</small></div>
+<div id="lvrow"><b class="nick hide" id="nickTxt"></b><b class="lvb">Lv.<span id="lvNum">1</span></b><div class="lvtrack"><i id="lvBar"></i></div><small id="lvTxt">0/0</small></div>
 <div id="buffs"></div>
+<div id="saveInd">저장됨 ✓</div>
+<div id="multi"></div>
 <div id="combo" class="hide"></div>
 <div id="reveal"></div>
 <div id="lvup"></div>
@@ -42,13 +46,14 @@
 </div>
 <div id="floats"></div>
 
+<button id="skillBtn" class="hide" aria-label="오라 스킬"></button>
 <div id="controls">
-  <div id="destiny"><div class="dstrack"><i id="dsBar"></i></div><span id="dsTxt">운명 0/100</span></div>
+  <div id="destiny"><div class="dstrack"><i id="dsBar"></i></div><span id="dsTxt">천장 0/200</span></div>
   <div id="tenth"></div>
   <div class="ctlrow">
     <button id="autoBtn" class="pill">자동</button>
     <button id="rollBtn">ROLL<span class="bar" id="rollBar"></span></button>
-    <button id="quickBtn" class="pill">빠름</button>
+    <button id="x10Btn" class="pill">×10</button>
   </div>
 </div>
 
@@ -83,6 +88,8 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/classic-auras.js"></script>
+<script src="js/classic-data.js"></script>
 <script src="js/render.js"></script>
 <script src="js/game.js"></script>
 </body>
