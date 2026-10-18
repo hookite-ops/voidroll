@@ -1027,7 +1027,7 @@ function pSet() {
       try { const d = JSON.parse(decodeURIComponent(escape(atob(ta.value.trim())))); if (d.v !== 1) throw 0; localStorage.setItem(SAVE_KEY, JSON.stringify(d)); location.reload(); }
       catch (e) { toast('올바르지 않은 코드예요'); }
     };
-    b.querySelector('#resetBtn').onclick = () => { if (confirm('정말 모든 진행을 지울까요? 되돌릴 수 없어요.')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
+    b.querySelector('#resetBtn').onclick = e => { const bt = e.currentTarget; if (bt.dataset.arm) { try { localStorage.removeItem(SAVE_KEY); } catch (er) { } location.reload(); return; } bt.dataset.arm = 1; bt.textContent = '한 번 더 누르면 모든 진행이 지워져요'; setTimeout(() => { if (bt.isConnected) { delete bt.dataset.arm; bt.textContent = '처음부터 다시 하기'; } }, 3000); };
   });
 }
 
