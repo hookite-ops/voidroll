@@ -24,10 +24,14 @@
   <div class="stats">
     <button id="luckBox"><small>행운 ⓘ</small><b id="luckVal">×1.00</b></button>
     <div><small>속도</small><b id="spdVal">×1.00</b></div>
-    <div><small>주화</small><b><i id="coinIco"></i><span id="coinVal">0</span></b></div>
+    <div id="coinBox"><small>주화</small><b><i id="coinIco"></i><span id="coinVal">0</span></b></div>
   </div>
 </header>
+<div id="lvrow"><b class="lvb">Lv.<span id="lvNum">1</span></b><div class="lvtrack"><i id="lvBar"></i></div><small id="lvTxt">0/0</small></div>
 <div id="buffs"></div>
+<div id="combo" class="hide"></div>
+<div id="reveal"></div>
+<div id="lvup"></div>
 <div id="banner"></div>
 
 <div id="result">
@@ -39,6 +43,7 @@
 <div id="floats"></div>
 
 <div id="controls">
+  <div id="destiny"><div class="dstrack"><i id="dsBar"></i></div><span id="dsTxt">운명 0/100</span></div>
   <div id="tenth"></div>
   <div class="ctlrow">
     <button id="autoBtn" class="pill">자동</button>

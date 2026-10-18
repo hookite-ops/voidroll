@@ -23,7 +23,7 @@ function sprite(col) {
   gr.addColorStop(0, rgba(col, 1)); gr.addColorStop(.2, rgba(col, .7)); gr.addColorStop(.5, rgba(col, .2)); gr.addColorStop(1, rgba(col, 0));
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64); SPR.set(col, c); return c;
 }
-function glow(ctx, col, x, y, r, a) { if (r <= 0 || a <= 0) return; ctx.globalAlpha = a; ctx.drawImage(sprite(col), x - r, y - r, r * 2, r * 2); }
+function glow(ctx, col, x, y, r, a) { if (r <= 0 || a <= 0) return; const p = ctx.globalAlpha; ctx.globalAlpha = a; ctx.drawImage(sprite(col), x - r, y - r, r * 2, r * 2); ctx.globalAlpha = p; }
 
 /* ── 이펙트 성격별 파티클 설정 (값은 R=50px 기준) ── */
 const FXC = {
@@ -280,7 +280,7 @@ class AuraFX {
       ctx.globalAlpha = al; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, R * .025); ctx.stroke();
     }
     if (tier >= 6 || fx === 'angel') { // 헤일로
-      const hy = cy - R * 1.42 + Math.sin(t * 2) * R * .05;
+      const hy = cy - R * (this.hero ? 2.05 : 1.42) + Math.sin(t * 2) * R * .05;
       ctx.globalAlpha = .9; ctx.strokeStyle = fx === 'angel' ? '#fff6c8' : c2; ctx.lineWidth = R * .07;
       ctx.beginPath(); ctx.ellipse(cx, hy, R * .62, R * .16, 0, 0, TAU); ctx.stroke();
       glow(ctx, fx === 'angel' ? '#ffe58a' : c, cx, hy, R * .9, .35);
@@ -408,11 +408,18 @@ class AuraFX {
         const br = (x, y, an, len, d) => { if (d > 5) return; const x2 = x + Math.cos(an) * len, y2 = y + Math.sin(an) * len; ctx.globalAlpha = .55 - d * .06; ctx.lineWidth = R * (.09 - d * .013); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); const sw = Math.sin(t * 1.3 + d) * .08; br(x2, y2, an - .45 + sw, len * .72, d + 1); br(x2, y2, an + .45 + sw, len * .72, d + 1); };
         br(cx, cy - R * .8, -Math.PI / 2, R * .9, 0); ctx.strokeStyle = c; br(cx, cy + R * .8, Math.PI / 2, R * .6, 2);
         ctx.lineCap = 'butt';
+      } else if (fx === 'eclipse' && this.hero) {
+        const ex = cx, ey = cy - R * 1.15; glow(ctx, c, ex, ey, R * 2.4, .45);
+        ctx.strokeStyle = c; ctx.lineWidth = R * .08; ctx.globalAlpha = .9; ctx.beginPath(); ctx.arc(ex, ey, R * 1.15, 0, TAU); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .95; ctx.fillStyle = '#05010a'; ctx.beginPath(); ctx.arc(ex, ey, R * 1.1, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter';
+        glow(ctx, '#ffffff', ex + Math.cos(t * .7) * R * 1.12, ey + Math.sin(t * .7) * R * 1.12, R * .5, .8);
       } else if (fx === 'blood') {
         glow(ctx, '#ff0022', cx, cy + R * .3, R * 2.4, .25);
       }
     } else {
-      if (fx === 'void' || fx === 'abyss' || fx === 'voidroll') {
+      if ((fx === 'void' || fx === 'abyss' || fx === 'voidroll') && this.hero) {
+        this.disk(ctx, cx, cy, R, t, 0, Math.PI);
+      } else if (fx === 'void' || fx === 'abyss' || fx === 'voidroll') {
         this.disk(ctx, cx, cy, R, t, 0, Math.PI);
         ctx.globalAlpha = .8; ctx.strokeStyle = fx === 'voidroll' ? hsl(t * 90, 1, .7) : c; ctx.lineWidth = R * .05;
         ctx.beginPath(); ctx.arc(cx, cy, R * 1.03, 0, TAU); ctx.stroke();
@@ -422,7 +429,7 @@ class AuraFX {
         for (let i = 0; i < 9; i++) {
           for (let k = 6; k >= 0; k--) { const an = (t - k * .05) * 1.1 + i * TAU / 9, x = cx + Math.cos(an) * R * 1.7, y = cy + Math.sin(an) * R * .7 - Math.sin(t * 3 + i) * R * .15; glow(ctx, i % 3 ? c : c2, x, y - k * R * .03, R * (.28 - k * .03), k ? .2 : .9); }
         }
-      } else if (fx === 'eclipse') {
+      } else if (fx === 'eclipse' && !this.hero) {
         const ox = Math.sin(t * .5) * R * .06;
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .93; ctx.fillStyle = '#05010a';
         ctx.beginPath(); ctx.arc(cx + ox, cy, R * .98, 0, TAU); ctx.fill();
@@ -528,47 +535,73 @@ class BiomeFX {
       default: return { k: 'mote', x: rnd(0, w), y: h + 10, vx: rnd(-6, 6), vy: -rnd(10, 26), sway: rnd(4, 14), ph: rnd(0, TAU), l: 0, m: 40, s: rnd(.8, 2.2), c: pick(['#b9a8ff', '#8ad8ff', '#ffffff']), a: rnd(.3, .7) };
     }
   }
+  skyCols(b) { const B = BIOMES[b], k = B.night ? .15 * this.nk : this.nk * .62; return B.sky.map(c => mix(c, '#04051c', k)); }
   sky(ctx, w, h, b, al) {
-    const B = BIOMES[b], g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, B.sky[0]); g.addColorStop(.55, B.sky[1]); g.addColorStop(1, B.sky[2]);
+    const c = this.skyCols(b), g = ctx.createLinearGradient(0, 0, 0, h * .75);
+    g.addColorStop(0, c[0]); g.addColorStop(.55, c[1]); g.addColorStop(1, c[2]);
     ctx.globalAlpha = al; ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
   }
-  draw(ctx, w, h, t) {
+  island(ctx, x, y, s, top, side, rim, t) {
+    ctx.save(); ctx.translate(x, y + Math.sin(t * .6 + x) * 4 * s); ctx.scale(s, s);
+    ctx.fillStyle = side; ctx.beginPath(); ctx.moveTo(-60, 0); ctx.quadraticCurveTo(-50, 30, -24, 46); ctx.lineTo(-8, 78); ctx.lineTo(4, 50); ctx.lineTo(18, 64); ctx.lineTo(30, 34); ctx.quadraticCurveTo(52, 22, 60, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = top; ctx.beginPath(); ctx.ellipse(0, 0, 62, 13, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = rim; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 62, 13, 0, Math.PI * .05, Math.PI * .95); ctx.stroke();
+    ctx.fillStyle = side; for (const [px, ph] of [[-30, 22], [-18, 30], [22, 26]]) { ctx.beginPath(); ctx.moveTo(px - 6, -2); ctx.lineTo(px, -ph); ctx.lineTo(px + 6, -2); ctx.fill(); }
+    ctx.restore();
+  }
+  drawBack(ctx, w, h, t) {
     ctx.save(); ctx.globalCompositeOperation = 'source-over';
     if (this.prev && this.mix < 1) this.sky(ctx, w, h, this.prev, 1);
     this.sky(ctx, w, h, this.cur, this.prev && this.mix < 1 ? this.mix : 1);
-    const B = BIOMES[this.cur], b = this.cur;
-    // 별
-    const starA = Math.min(1, (B.night ? 1 : b === 'windy' ? .25 : b === 'rainy' ? .1 : .15) + this.nk * .7);
-    ctx.fillStyle = '#ffffff';
-    for (const s of this.stars) { ctx.globalAlpha = starA * (.35 + .35 * Math.sin(t * 1.5 + s.ph)); ctx.fillRect(s.x * w, s.y * h, s.s, s.s); }
-    // 달 / 배경 천체
+    const B = BIOMES[this.cur], b = this.cur, sk = this.skyCols(b), nk = this.nk;
+    const starA = Math.min(1, (B.night ? 1 : 0) + nk * .9);
+    if (starA > .02) { ctx.fillStyle = '#ffffff'; for (const s of this.stars) { ctx.globalAlpha = starA * (.35 + .35 * Math.sin(t * 1.5 + s.ph)); ctx.fillRect(s.x * w, s.y * h * .8, s.s, s.s); } }
     ctx.globalCompositeOperation = 'lighter';
-    if (b === 'void') { for (let i = 0; i < 4; i++) { ctx.strokeStyle = rgba('#8a5cff', .1); ctx.lineWidth = 30 - i * 5; ctx.beginPath(); ctx.ellipse(w / 2, h * .4, w * (.3 + i * .14), w * (.12 + i * .06), t * .1 + i, 0, Math.PI * 1.3); ctx.stroke(); } }
-    else if (b === 'hell') glow(ctx, '#ff3a10', w / 2, h * 1.05, w * .9, .55);
-    else if (b === 'sand') glow(ctx, '#ffd080', w * .78, h * .16, w * .35, .5);
-    else if (b === 'starfall' || b === 'normal') glow(ctx, '#7a6aff', w * .2, h * .12, w * .45, .18);
-    else if (b === 'snowy') glow(ctx, '#ffffff', w * .5, h * .05, w * .6, .25);
-    else if (b === 'sakura') glow(ctx, '#ffb0d4', w * .5, h * .2, w * .7, .3);
+    const mx = w * .82, my = h * .2;
+    if (b === 'void') { for (let i = 0; i < 4; i++) { ctx.globalAlpha = 1; ctx.strokeStyle = rgba('#8a5cff', .12); ctx.lineWidth = 30 - i * 5; ctx.beginPath(); ctx.ellipse(w / 2, h * .38, w * (.3 + i * .14), w * (.12 + i * .06), t * .1 + i, 0, Math.PI * 1.3); ctx.stroke(); } }
+    else if (b === 'glitch') { glow(ctx, '#ff2a6d', w * .2, h * .2, w * .5, .25); glow(ctx, '#2affd0', w * .8, h * .35, w * .5, .2); }
+    else {
+      // 햇살 (낮)
+      const day = 1 - nk;
+      if (day > .05 && b !== 'rainy') {
+        glow(ctx, b === 'hell' ? '#ff7a30' : b === 'sand' ? '#ffd080' : '#fff4d0', mx, my, w * .55, .45 * day);
+        const g = ctx.createRadialGradient(mx, my, 0, mx, my, h * .9); g.addColorStop(0, `rgba(255,248,220,${.16 * day})`); g.addColorStop(1, 'rgba(255,248,220,0)');
+        ctx.fillStyle = g; ctx.globalAlpha = 1; ctx.beginPath();
+        for (let i = 0; i < 7; i++) { const an = Math.PI * .55 + i * .16 + Math.sin(t * .15 + i) * .03, wd = .035 + (i % 3) * .015; ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(an - wd) * h, my + Math.sin(an - wd) * h); ctx.lineTo(mx + Math.cos(an + wd) * h, my + Math.sin(an + wd) * h); ctx.closePath(); }
+        ctx.fill();
+        ctx.globalAlpha = day; ctx.fillStyle = b === 'hell' ? '#ffb07a' : '#fffbe8'; ctx.beginPath(); ctx.arc(mx, my, 18, 0, TAU); ctx.fill();
+      }
+      if (nk > .05) { glow(ctx, '#dfe6ff', mx, my, 80, .35 * nk); ctx.globalAlpha = nk * .95; ctx.fillStyle = '#f0f4ff'; ctx.beginPath(); ctx.arc(mx, my, 16, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = nk * .95; ctx.fillStyle = sk[0]; ctx.beginPath(); ctx.arc(mx + 7, my - 4, 14, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter'; }
+      if (b === 'hell') glow(ctx, '#ff3a10', w / 2, h * 1.05, w * .9, .5);
+      if (b === 'sakura') glow(ctx, '#ffb0d4', w * .4, h * .3, w * .7, .25);
+    }
     // 구름
     ctx.globalCompositeOperation = 'source-over';
-    for (const c of this.clouds) { const cx = c.x * w, cy = c.y * h, r = 60 * c.s * (w / 400); ctx.globalAlpha = b === 'void' || b === 'glitch' ? .05 : .13; ctx.fillStyle = mix(B.sky[2], '#ffffff', .25); for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.ellipse(cx + (i - 1.5) * r * .55, cy + Math.sin(i * 2) * r * .12, r * .55, r * .22, 0, 0, TAU); ctx.fill(); } }
-    // 해 / 달
-    if (b !== 'void' && b !== 'glitch') {
-      const nk = this.nk, mx = w * .82, my = h * (.1 + (1 - nk) * .02);
-      ctx.globalCompositeOperation = 'lighter';
-      if (nk > .05) { glow(ctx, '#dfe6ff', mx, my, 70, .35 * nk); ctx.globalAlpha = nk * .95; ctx.fillStyle = '#f0f4ff'; ctx.beginPath(); ctx.arc(mx, my, 16, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = nk * .9; ctx.fillStyle = B.sky[0]; ctx.beginPath(); ctx.arc(mx + 7, my - 4, 14, 0, TAU); ctx.fill(); }
-      ctx.globalCompositeOperation = 'source-over';
+    const cc = b === 'rainy' ? '#6a7a94' : b === 'hell' ? '#5a1a1a' : mix(sk[2], '#ffffff', .45);
+    for (const c of this.clouds) {
+      const cx = c.x * w, cy = c.y * h * .9, r = 46 * c.s * (w / 400);
+      ctx.globalAlpha = b === 'void' || b === 'glitch' ? .06 : (b === 'rainy' ? .5 : .32) * (1 - nk * .5);
+      ctx.fillStyle = cc; ctx.beginPath();
+      for (const [ox, oy, rr] of [[-1, .2, .55], [-.45, -.15, .7], [.2, -.3, .8], [.8, .05, .6], [0, .25, .7]]) { ctx.moveTo(cx + ox * r + rr * r, cy + oy * r); ctx.arc(cx + ox * r, cy + oy * r, rr * r, 0, TAU); }
+      ctx.fill();
     }
+    // 떠 있는 섬
+    const isT = mix(B.ground, sk[1], .45), isS = mix(B.ground, sk[0], .35), rim = mix(B.grass || '#ffffff', sk[2], .3);
+    const sc = w / 400;
+    this.island(ctx, w * .13, h * .37, .55 * sc, isT, isS, rim, t);
+    this.island(ctx, w * .88, h * .3, .42 * sc, isT, isS, rim, t + 2);
+    this.island(ctx, w * .72, h * .5, .3 * sc, isT, isS, rim, t + 4);
     // 언덕
-    ctx.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < 3; i++) {
-      ctx.globalAlpha = 1; ctx.fillStyle = mix(B.ground, B.sky[2], .55 - i * .25);
+    for (let i = 0; i < 2; i++) {
+      ctx.globalAlpha = 1; ctx.fillStyle = mix(B.ground, sk[2], .6 - i * .25);
       ctx.beginPath(); ctx.moveTo(0, h);
-      for (let x = 0; x <= w + 20; x += 16) { let y = h * (.66 + i * .07); for (const [f, ph, amp] of this.hills[i]) y += Math.sin(x * f + ph) * amp; ctx.lineTo(x, y); }
+      for (let x = 0; x <= w + 20; x += 16) { let y = h * (.6 + i * .05); for (const [f, ph, amp] of this.hills[i]) y += Math.sin(x * f + ph) * amp; ctx.lineTo(x, y); }
       ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
     }
-    // 파티클
+    ctx.restore();
+  }
+  drawFront(ctx, w, h, t) {
+    ctx.save(); const b = this.cur;
     for (const p of this.P) {
       const al = (p.a || 1) * Math.min(1, p.l / .3) * (p.m < 10 ? 1 - Math.pow(p.l / p.m, 3) : 1) * clamp((p.m - p.l) / .6, 0, 1);
       ctx.globalAlpha = al;
@@ -583,26 +616,181 @@ class BiomeFX {
         }
         case 'petal': ctx.globalCompositeOperation = 'source-over'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .55, 0, 0, TAU); ctx.fill(); ctx.restore(); break;
         case 'leaf': ctx.globalCompositeOperation = 'source-over'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = '#7ad89a'; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .45, 0, 0, TAU); ctx.fill(); ctx.restore(); break;
-        case 'tw': ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.sin(p.l / p.m * Math.PI); glow(ctx, '#fff6d0', p.x, p.y, p.s * 4, Math.sin(p.l / p.m * Math.PI)); break;
+        case 'tw': ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#fff6d0', p.x, p.y, p.s * 4, Math.sin(p.l / p.m * Math.PI)); break;
         case 'bit': ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = p.c; ctx.font = `${p.s}px monospace`; ctx.fillText(p.ch, p.x, p.y); break;
         case 'ember': case 'in': ctx.globalCompositeOperation = 'lighter'; glow(ctx, p.c, p.x, p.y, p.s * 4, al); ctx.fillStyle = p.c; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); break;
+        case 'mote': ctx.globalCompositeOperation = 'lighter'; glow(ctx, p.c, p.x, p.y, p.s * 3, al); break;
         default: ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill();
       }
     }
     ctx.globalCompositeOperation = 'source-over';
-    if (b === 'sand') { ctx.globalAlpha = .16 + .05 * Math.sin(t); ctx.fillStyle = '#c87a30'; ctx.fillRect(0, 0, w, h); }
-    if (b === 'rainy') { ctx.globalAlpha = .18; ctx.fillStyle = '#000814'; ctx.fillRect(0, 0, w, h); }
+    if (b === 'sand') { ctx.globalAlpha = .12 + .05 * Math.sin(t); ctx.fillStyle = '#d88a40'; ctx.fillRect(0, 0, w, h); }
+    if (b === 'rainy') { ctx.globalAlpha = .12; ctx.fillStyle = '#000814'; ctx.fillRect(0, 0, w, h); }
     if (this.flash > 0) { ctx.globalAlpha = this.flash * .35; ctx.fillStyle = '#dfe8ff'; ctx.fillRect(0, 0, w, h); }
     if (b === 'glitch') {
       for (const g of this.glit) { ctx.globalAlpha = .55; ctx.fillStyle = g.c; ctx.fillRect(g.x - g.w / 2, g.y, g.w, g.h); }
       ctx.globalAlpha = .07; ctx.fillStyle = '#000'; for (let y = 0; y < h; y += 4) ctx.fillRect(0, y, w, 2);
     }
-    if (this.nk > .01) { ctx.globalAlpha = this.nk * .32; ctx.fillStyle = '#02031a'; ctx.fillRect(0, 0, w, h); }
-    // 비네팅
-    const vg = ctx.createRadialGradient(w / 2, h * .42, Math.min(w, h) * .3, w / 2, h * .5, Math.max(w, h) * .8);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+    const vg = ctx.createRadialGradient(w / 2, h * .42, Math.min(w, h) * .4, w / 2, h * .5, Math.max(w, h) * .8);
+    vg.addColorStop(0, 'rgba(0,0,10,0)'); vg.addColorStop(1, `rgba(0,0,10,${.28 + this.nk * .2})`); ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+  draw(ctx, w, h, t) { this.drawBack(ctx, w, h, t); this.drawFront(ctx, w, h, t); }
+}
+
+/* ── 무대(발판 섬) ── */
+function drawStage(ctx, w, h, cx, gy, R, biome, a, t, spin, nk = 0) {
+  const B = BIOMES[biome], gc = mix(B.grass || '#8a7aff', '#04051c', nk * .45), ground = mix(B.ground, '#04051c', nk * .4);
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  const rx = Math.max(w * .75, R * 6), ry = R * .95, ey = gy + R * .25;
+  // 절벽
+  let g = ctx.createLinearGradient(0, ey, 0, h);
+  g.addColorStop(0, mix(ground, '#000000', .1)); g.addColorStop(1, mix(ground, '#000000', .65));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx - rx, ey); ctx.lineTo(cx - rx, h); ctx.lineTo(cx + rx, h); ctx.lineTo(cx + rx, ey); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = rgba('#000000', .18); ctx.lineWidth = 2;
+  for (let i = 0; i < 7; i++) { const x = cx + (i - 3) * rx * .3; ctx.beginPath(); ctx.moveTo(x, ey + ry * .6); ctx.lineTo(x + 10, ey + ry * 2.2); ctx.lineTo(x - 6, ey + ry * 3.4); ctx.stroke(); }
+  // 윗면
+  g = ctx.createLinearGradient(0, ey - ry, 0, ey + ry);
+  g.addColorStop(0, mix(gc, '#ffffff', .1)); g.addColorStop(1, mix(gc, ground, .55));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, ey, rx, ry, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = mix(gc, '#ffffff', .45); ctx.lineWidth = 3; ctx.globalAlpha = .7; ctx.beginPath(); ctx.ellipse(cx, ey, rx, ry, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+  // 풀잎
+  ctx.globalAlpha = .55; ctx.strokeStyle = mix(gc, '#ffffff', .3); ctx.lineWidth = 1.5;
+  for (let i = 0; i < 26; i++) { const an = i / 26 * TAU, x = cx + Math.cos(an) * rx * .86, y = ey + Math.sin(an) * ry * .8; if (Math.abs(x - cx) < R * 1.5 && Math.sin(an) < .3) continue; const sw = Math.sin(t * 2 + i) * 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sw - 2, y - 7); ctx.moveTo(x + 3, y); ctx.lineTo(x + 3 + sw, y - 9); ctx.stroke(); }
+  // 소품
+  ctx.globalAlpha = 1;
+  const props = [[-.62, -.15, 1], [-.8, .25, .8], [.6, -.2, 1.05], [.8, .2, .75], [-.4, .45, .55], [.42, .5, .6]];
+  for (const [px, py, s] of props) drawProp(ctx, cx + px * Math.min(rx, w * .5), ey + py * ry, R * .5 * s, B.prop || 'crystal', gc, t + px * 3, nk);
+  // 소환진
+  const c = a ? a.c : '#a89cff';
+  ctx.save(); ctx.translate(cx, gy); ctx.scale(1, .3); ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = .35 + spin * .5; ctx.strokeStyle = c; ctx.lineWidth = R * .05;
+  ctx.beginPath(); ctx.arc(0, 0, R * 1.5, 0, TAU); ctx.stroke();
+  ctx.save(); ctx.rotate(t * (.4 + spin * 5));
+  ctx.lineWidth = R * .03; ctx.beginPath(); ctx.arc(0, 0, R * 1.2, 0, TAU); ctx.stroke();
+  ctx.beginPath(); for (let i = 0; i <= 5; i++) { const an = i * TAU / 5 * 2 - Math.PI / 2; ctx.lineTo(Math.cos(an) * R * 1.2, Math.sin(an) * R * 1.2); } ctx.stroke();
+  ctx.fillStyle = c; for (let i = 0; i < 12; i++) { ctx.save(); ctx.rotate(i * TAU / 12); ctx.fillRect(-R * .04, -R * 1.44, R * .08, R * .14); ctx.restore(); }
+  ctx.restore();
+  glow(ctx, c, 0, 0, R * (1.6 + spin), .25 + spin * .4);
+  ctx.restore();
+  ctx.restore();
+}
+function drawProp(ctx, x, y, s, kind, gc, t, nk) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.globalAlpha = .35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(0, s * .1, s * .9, s * .25, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  switch (kind) {
+    case 'crystal': case 'void': case 'glitch': {
+      const col = kind === 'void' ? '#8a5cff' : kind === 'glitch' ? (Math.sin(t * 7) > .6 ? '#ff2a6d' : '#2affd0') : mix(gc, '#ffffff', .2);
+      for (const [ox, h2, rot] of [[0, 1.8, 0], [-.45, 1.1, -.35], [.42, 1.2, .3]]) {
+        ctx.save(); ctx.translate(ox * s, 0); ctx.rotate(rot);
+        const g = ctx.createLinearGradient(-s * .25, 0, s * .25, 0); g.addColorStop(0, mix(col, '#ffffff', .5)); g.addColorStop(1, mix(col, '#000000', .35));
+        ctx.fillStyle = kind === 'void' ? '#1a0e3a' : g; ctx.beginPath(); ctx.moveTo(-s * .22, 0); ctx.lineTo(-s * .22, -h2 * s * .7); ctx.lineTo(0, -h2 * s); ctx.lineTo(s * .22, -h2 * s * .7); ctx.lineTo(s * .22, 0); ctx.fill();
+        if (kind === 'void') { ctx.fillStyle = col; ctx.fillRect(-s * .05, -h2 * s * .6, s * .1, s * .1); }
+        ctx.restore();
+      }
+      ctx.globalCompositeOperation = 'lighter'; glow(ctx, col, 0, -s * .8, s * 1.6, .35 + .15 * Math.sin(t * 2)); break;
+    }
+    case 'tree': case 'sakura': {
+      ctx.fillStyle = '#5a3a2a'; ctx.fillRect(-s * .1, -s * 1.2, s * .2, s * 1.2);
+      const cc = kind === 'sakura' ? '#ffb0d4' : mix(gc, '#000000', .15), sw = Math.sin(t * 1.5) * s * .05;
+      for (const [ox, oy, r] of [[0, -1.7, .7], [-.45, -1.35, .5], [.45, -1.4, .55], [0, -2.15, .45]]) { ctx.fillStyle = mix(cc, '#ffffff', oy < -2 ? .25 : .08); ctx.beginPath(); ctx.arc(ox * s + sw, oy * s, r * s, 0, TAU); ctx.fill(); }
+      break;
+    }
+    case 'pine': {
+      ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-s * .08, -s * .5, s * .16, s * .5);
+      for (let i = 0; i < 3; i++) { const yy = -s * (.4 + i * .55), ww = s * (.75 - i * .18); ctx.fillStyle = '#2f6a6a'; ctx.beginPath(); ctx.moveTo(-ww, yy); ctx.lineTo(0, yy - s * .8); ctx.lineTo(ww, yy); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(-ww * .5, yy - s * .4); ctx.lineTo(0, yy - s * .8); ctx.lineTo(ww * .5, yy - s * .4); ctx.fill(); }
+      break;
+    }
+    case 'cactus': {
+      ctx.fillStyle = '#5a9a4a'; ctx.strokeStyle = '#3a6a2a'; ctx.lineWidth = s * .05;
+      const rr = (x0, y0, w0, h0) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w0, h0, w0 / 2) : ctx.rect(x0, y0, w0, h0); ctx.fill(); ctx.stroke(); };
+      rr(-s * .17, -s * 1.6, s * .34, s * 1.6); rr(-s * .55, -s * 1.15, s * .24, s * .6); rr(s * .3, -s * 1.3, s * .24, s * .7);
+      break;
+    }
+    case 'lava': {
+      ctx.fillStyle = '#2a1414'; ctx.beginPath(); ctx.moveTo(-s * .8, 0); ctx.lineTo(-s * .5, -s * .9); ctx.lineTo(s * .1, -s * 1.2); ctx.lineTo(s * .7, -s * .6); ctx.lineTo(s * .8, 0); ctx.fill();
+      ctx.strokeStyle = '#ff6a1a'; ctx.lineWidth = s * .08; ctx.beginPath(); ctx.moveTo(-s * .3, -s * .7); ctx.lineTo(0, -s * .4); ctx.lineTo(s * .3, -s * .8); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#ff5a1a', 0, -s * .5, s * 1.4, .35 + .2 * Math.sin(t * 3)); break;
+    }
+  }
+  ctx.restore();
+}
+
+/* ── 주인공 ── */
+function drawHero(ctx, cx, cy, R, a, t, st = {}) {
+  const raise = st.raise || 0, joy = st.joy || 0, c = a ? a.c : '#9aa4ff', c2 = a ? a.c2 : '#3a3a6a';
+  const cloak = mix(mix(c2, '#22204a', .55), '#000000', .1), cloakL = mix(cloak, '#ffffff', .18), trim = mix(c, '#ffffff', .25);
+  const bob = Math.sin(t * 2.2) * R * .04 - joy * R * .12 * Math.abs(Math.sin(t * 9));
+  const y0 = cy + bob, wind = Math.sin(t * 1.7) * .5 + Math.sin(t * 3.1) * .25;
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // 그림자
+  ctx.globalAlpha = .4; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(cx, cy + R * 1.45, R * .75, R * .16, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  // 망토 뒷자락
+  ctx.fillStyle = mix(cloak, '#000000', .3);
+  ctx.beginPath(); ctx.moveTo(cx - R * .45, y0 - R * .45);
+  ctx.quadraticCurveTo(cx - R * (1 + wind * .2), y0 + R * .5, cx - R * (.95 + wind * .25), y0 + R * 1.25);
+  for (let i = 0; i <= 6; i++) { const x = cx - R * .95 + i * R * .32, y = y0 + R * (1.22 + Math.sin(t * 4 + i) * .05); ctx.lineTo(x + wind * R * .1, y); }
+  ctx.quadraticCurveTo(cx + R * (1 + wind * .1), y0 + R * .5, cx + R * .45, y0 - R * .45); ctx.closePath(); ctx.fill();
+  // 다리
+  ctx.strokeStyle = '#1c1a34'; ctx.lineWidth = R * .22;
+  ctx.beginPath(); ctx.moveTo(cx - R * .2, y0 + R * .8); ctx.lineTo(cx - R * .22, cy + R * 1.32); ctx.moveTo(cx + R * .2, y0 + R * .8); ctx.lineTo(cx + R * .22, cy + R * 1.32); ctx.stroke();
+  ctx.fillStyle = '#2a2440'; ctx.beginPath(); ctx.ellipse(cx - R * .26, cy + R * 1.38, R * .17, R * .09, 0, 0, TAU); ctx.ellipse(cx + R * .26, cy + R * 1.38, R * .17, R * .09, 0, 0, TAU); ctx.fill();
+  // 로브
+  let g = ctx.createLinearGradient(0, y0 - R * .6, 0, y0 + R * 1.05); g.addColorStop(0, cloakL); g.addColorStop(1, cloak);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx - R * .42, y0 - R * .55);
+  ctx.quadraticCurveTo(cx - R * .55, y0 + R * .3, cx - R * .72, y0 + R * .98);
+  for (let i = 0; i <= 8; i++) { const x = cx - R * .72 + i * R * .18, y = y0 + R * (.98 + Math.sin(t * 5 + i * 1.3) * .035 + (i % 2) * .03); ctx.lineTo(x, y); }
+  ctx.quadraticCurveTo(cx + R * .55, y0 + R * .3, cx + R * .42, y0 - R * .55); ctx.closePath(); ctx.fill();
+  // 앞섶·장식
+  ctx.strokeStyle = trim; ctx.lineWidth = R * .045; ctx.globalAlpha = .9;
+  ctx.beginPath(); ctx.moveTo(cx, y0 - R * .45); ctx.lineTo(cx, y0 + R * .98); ctx.stroke();
+  ctx.beginPath(); for (let i = 0; i <= 8; i++) { const x = cx - R * .7 + i * R * .175, y = y0 + R * (.93 + Math.sin(t * 5 + i * 1.3) * .035); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = '#2a2448'; ctx.fillRect(cx - R * .5, y0 + R * .12, R, R * .12);
+  ctx.globalCompositeOperation = 'lighter'; glow(ctx, c, cx, y0 + R * .18, R * .35, .9); ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = mix(c, '#ffffff', .4); ctx.beginPath(); ctx.moveTo(cx, y0 + R * .06); ctx.lineTo(cx + R * .08, y0 + R * .18); ctx.lineTo(cx, y0 + R * .3); ctx.lineTo(cx - R * .08, y0 + R * .18); ctx.fill();
+  // 팔
+  const arm = (sd) => {
+    const sx = cx + sd * R * .42, sy = y0 - R * .38;
+    const ang = (Math.PI / 2 - sd * (.35 + Math.sin(t * 2 + sd) * .05)) * (1 - raise) + (-Math.PI / 2 + sd * .45) * raise;
+    const ex = sx + Math.cos(ang) * R * .4 * (sd > 0 ? 1 : 1), ey = sy + Math.sin(ang) * R * .4;
+    const ang2 = ang + sd * (raise ? -.3 : .2), hx = ex + Math.cos(ang2) * R * .36, hy = ey + Math.sin(ang2) * R * .36;
+    ctx.strokeStyle = cloakL; ctx.lineWidth = R * .2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.strokeStyle = trim; ctx.lineWidth = R * .06; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang2) * R * .22, ey + Math.sin(ang2) * R * .22); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.fillStyle = '#ffe2cc'; ctx.beginPath(); ctx.arc(hx, hy, R * .1, 0, TAU); ctx.fill();
+    if (raise > .1) { ctx.globalCompositeOperation = 'lighter'; glow(ctx, c, hx, hy, R * .45 * raise, .8 * raise); ctx.globalCompositeOperation = 'source-over'; }
+    return [hx, hy];
+  };
+  const hL = arm(-1), hR = arm(1);
+  // 목도리
+  ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(cx, y0 - R * .52, R * .4, R * .13, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = mix(c, '#000000', .15); ctx.lineWidth = R * .14;
+  ctx.beginPath(); ctx.moveTo(cx + R * .22, y0 - R * .5); ctx.bezierCurveTo(cx + R * .6, y0 - R * .45 + wind * R * .2, cx + R * .8, y0 - R * .2 - wind * R * .2, cx + R * (1 + wind * .3), y0 - R * .3 + Math.sin(t * 5) * R * .1); ctx.stroke();
+  // 머리
+  const hy = y0 - R * 1.02;
+  ctx.fillStyle = mix(cloak, '#ffffff', .1);
+  ctx.beginPath(); ctx.moveTo(cx - R * .55, hy + R * .25); ctx.quadraticCurveTo(cx - R * .62, hy - R * .55, cx, hy - R * .6);
+  const tip = wind * R * .25; ctx.quadraticCurveTo(cx + R * .45, hy - R * .62, cx + R * (.7 + .2 * wind), hy - R * .85 + tip * .3); ctx.quadraticCurveTo(cx + R * .6, hy - R * .3, cx + R * .55, hy + R * .25); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffe6d4'; ctx.beginPath(); ctx.ellipse(cx, hy + R * .05, R * .4, R * .38, 0, 0, TAU); ctx.fill();
+  const hair = mix(c, '#f4eeff', .55); ctx.fillStyle = hair;
+  ctx.beginPath(); ctx.moveTo(cx - R * .42, hy - R * .02); ctx.quadraticCurveTo(cx - R * .3, hy - R * .42, cx, hy - R * .38); ctx.quadraticCurveTo(cx + R * .32, hy - R * .42, cx + R * .43, hy);
+  ctx.lineTo(cx + R * .28, hy - R * .12); ctx.lineTo(cx + R * .16, hy - R * .02); ctx.lineTo(cx + R * .05, hy - R * .16); ctx.lineTo(cx - R * .1, hy - R * .04); ctx.lineTo(cx - R * .2, hy - R * .16); ctx.lineTo(cx - R * .32, hy - R * .03); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = mix(cloak, '#ffffff', .1); ctx.beginPath(); ctx.moveTo(cx - R * .55, hy + R * .25); ctx.quadraticCurveTo(cx - R * .5, hy - R * .1, cx - R * .42, hy - R * .05); ctx.lineTo(cx - R * .38, hy + R * .32); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx + R * .55, hy + R * .25); ctx.quadraticCurveTo(cx + R * .5, hy - R * .1, cx + R * .43, hy - R * .03); ctx.lineTo(cx + R * .38, hy + R * .32); ctx.fill();
+  // 눈
+  const blink = (t % 4.3) < .12 ? .15 : 1, eyeC = a ? mix(c, '#ffffff', .2) : '#3a3466';
+  for (const sd of [-1, 1]) {
+    const ex = cx + sd * R * .16, ey = hy + R * .1;
+    if (joy > .3) { ctx.strokeStyle = '#3a2a4a'; ctx.lineWidth = R * .05; ctx.beginPath(); ctx.arc(ex, ey + R * .03, R * .07, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); continue; }
+    ctx.fillStyle = '#2a2040'; ctx.beginPath(); ctx.ellipse(ex, ey, R * .075, R * .11 * blink, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = eyeC; ctx.beginPath(); ctx.ellipse(ex, ey + R * .025, R * .055, R * .07 * blink, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex - R * .025, ey - R * .04 * blink, R * .025, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = .5; ctx.fillStyle = '#ff9ab8'; ctx.beginPath(); ctx.ellipse(cx - R * .27, hy + R * .22, R * .07, R * .04, 0, 0, TAU); ctx.ellipse(cx + R * .27, hy + R * .22, R * .07, R * .04, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#8a4a5a'; ctx.lineWidth = R * .03; ctx.beginPath();
+  if (joy > .3 || raise > .5) ctx.arc(cx, hy + R * .22, R * .07, .1, Math.PI - .1); else { ctx.moveTo(cx - R * .04, hy + R * .26); ctx.quadraticCurveTo(cx, hy + R * .29, cx + R * .04, hy + R * .26); }
+  ctx.stroke();
+  ctx.restore();
+  return { hL, hR, head: [cx, hy] };
 }
 
 /* ── 컷신 ── */
@@ -615,7 +803,7 @@ class Cutscene {
     const base = [.9, .9, .9, .9, 1.4, 1.9, 2.4, 2.9, 3.6][this.tier] + (a.id === 'voidroll' || a.id === 'worldend' ? .8 : 0);
     this.T1 = base; this.T2 = base + .45;
     this.P = []; this.warp = []; this.waves = []; this.shards = []; this.cracks = []; this.sparks = []; this.shake = 0; this.flash = 0; this.boomed = false; this.fakes = 0;
-    this.fx = new AuraFX(); this.fx.set(a, !!opt.shiny);
+    this.fx = new AuraFX(); this.fx.hero = true; this.fx.set(a, !!opt.shiny);
     this.env = null;
     if (this.ex) { this.env = new BiomeFX(); this.env.cur = this.ex; this.env.prev = null; this.env.mix = 1; this.env.nk = a.night ? 1 : 0; this.env.forceNight = a.night ? 1 : a.day ? 0 : null; }
     this.cv.classList.remove('hide');
@@ -701,7 +889,7 @@ class Cutscene {
         ctx.globalCompositeOperation = 'lighter';
       }
     } else {
-      const u = t - this.T2, k = Math.min(1, u / .6), R = Rb * (.6 + .4 * ease(k));
+      const u = t - this.T2, k = Math.min(1, u / .6), R = Rb * (.6 + .4 * ease(k)) * .9;
       if (tier >= 6) { // 배경 마법진
         ctx.save(); ctx.translate(cx, cy); ctx.rotate(u * .15); ctx.globalAlpha = Math.min(.5, u * .6); ctx.strokeStyle = a.c; ctx.lineWidth = 1.5;
         const RR = Math.min(w, h) * .42;
@@ -711,7 +899,7 @@ class Cutscene {
         ctx.restore();
       }
       this.fx.drawBack(ctx, cx, cy, R, t);
-      drawOrb(ctx, cx, cy, R, a, t);
+      drawHero(ctx, cx, cy, R * 1.15, a, t, { raise: Math.max(0, 1 - u * .6), joy: u > 1.2 ? .5 : 0 });
       this.fx.drawFront(ctx, cx, cy, R, t);
       ctx.globalCompositeOperation = 'lighter';
       for (const wv of this.waves) { if (wv.l < 0) continue; const q = Math.min(1, wv.l / 1.4); ctx.globalAlpha = (1 - q) * .8; ctx.strokeStyle = wv.l < .1 ? '#ffffff' : a.c; ctx.lineWidth = 8 * (1 - q) + 1; ctx.beginPath(); ctx.arc(cx, cy, R + ease(q) * Math.max(w, h) * .7, 0, TAU); ctx.stroke(); }

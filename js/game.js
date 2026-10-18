@@ -12,11 +12,11 @@ const SORTED = [...AURAS].sort((a, b) => b.r - a.r);
 let S;
 function defState() {
   return { v: 1, rolls: 0, auras: {}, found: {}, shiny: {}, eq: null, eqShiny: false, mats: {}, pots: { lucky: 2, dice: 1 }, gaunts: {}, eqG: null,
-    charms: {}, eqC: [], coin: 0, active: {}, next: 1, starBoost: 0,
+    charms: {}, eqC: [], coin: 0, lv: 1, xp: 0, destiny: 0, active: {}, next: 1, starBoost: 0,
     biome: 'normal', biomeEnd: Date.now() + 150000, seen: { normal: 1 }, quests: {}, best: null, gateOpen: false,
     mer: { next: Date.now() + 180000, until: 0, offers: [] }, daily: { last: '', streak: 0 }, recent: [],
-    stats: { pots: 0, crafted: 0, play: 0, cuts: 0, sacr: 0, stars: 0, buys: 0, coins: 0, shinies: 0 }, log: [],
-    set: { sound: true, music: true, cut: 4, quick: false, low: false, haptic: true } };
+    stats: { pots: 0, crafted: 0, play: 0, cuts: 0, sacr: 0, stars: 0, buys: 0, coins: 0, shinies: 0, chests: 0, maxCombo: 0 }, log: [],
+    set: { sound: true, music: true, cut: 4, quick: false, low: false, haptic: true, autoEq: true } };
 }
 function load() {
   try {
@@ -44,12 +44,16 @@ function luckParts() {
   if (g) { add += g.luck; parts.push([`장갑 · ${g.n}`, `+${Math.round(g.luck * 100)}%`]); }
   for (const c of cs) if (c.luck) { add += c.luck; parts.push([`부적 · ${c.n}`, `+${Math.round(c.luck * 100)}%`]); }
   const ms = mastery(); if (ms) { add += ms * .05; parts.push([`마스터리 ${ms}개`, `+${ms * 5}%`]); }
+  if (S.lv > 1) { add += (S.lv - 1) * .01; parts.push([`레벨 ${S.lv}`, `+${S.lv - 1}%`]); }
   let mul = 1;
   const pl = potEff('luck', true); if (pl > 1) { mul *= pl; parts.push(['물약', fmtX(pl)]); }
   for (const c of cs) { if (c.bm && c.bm.b === S.biome) { mul *= c.bm.x; parts.push([`${c.n} (${BIOMES[c.bm.b].n})`, fmtX(c.bm.x)]); } if (c.night && isNight()) { mul *= c.night; parts.push([`${c.n} (밤)`, fmtX(c.night)]); } }
   if (S.starBoost > Date.now()) { mul *= 1.5; parts.push(['별똥별 축복', '×1.50']); }
+  const cb = comboBonus(); if (cb > 0) { mul *= 1 + cb; parts.push([`콤보 ${COMBO.n}`, fmtX(1 + cb)]); }
   return { add, mul, total: add * mul, parts };
 }
+const COMBO = { n: 0, t: 0 };
+function comboBonus() { return COMBO.n >= 3 ? Math.min(.5, COMBO.n * .01) : 0; }
 function baseLuck() { return luckParts().total; }
 function speed() { const g = gnt(); let s = 1 + (g ? g.speed : 0) + potEff('speed'); for (const c of charmsOn()) s += c.speed || 0; return s; }
 function bonusEvery() { return charmsOn().some(c => c.every) ? 8 : 10; }
@@ -180,31 +184,44 @@ function resize() {
   for (const c of [cv, cutCv]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
 }
 addEventListener('resize', resize);
-const orbPos = () => { const R = Math.min(W * .13, H * .068, 72); return { R, cx: W / 2, by: H * .37 }; };
+const orbPos = () => { const R = Math.min(W * .135, H * .066, 74); return { R, cx: W / 2, by: H * .385 }; };
+const CAM = { shake: 0, z: 1, zt: 1, flash: 0, fc: '#ffffff', hit: 0 };
+const SHOW = { a: null, sh: false, until: 0, joy: 0 };
 
 /* ── 굴림 ── */
 const RS = { on: false, t: 0, dur: 1, res: null, extra: null, nt: 0, isNew: false, auto: false, shiny: false, sus: 0 };
 function startRoll() {
   if (RS.on || CUT.on || !started) return;
-  const tenth = isTenth(), luck = baseLuck() * (tenth ? tenthMult() : 1) * S.next;
+  const now = performance.now() / 1000;
+  COMBO.n = now - COMBO.t < 4.5 ? COMBO.n + 1 : 1; COMBO.t = now; if (COMBO.n > S.stats.maxCombo) S.stats.maxCombo = COMBO.n;
+  const destiny = S.destiny >= DESTINY_MAX;
+  const tenth = isTenth(), luck = baseLuck() * (tenth ? tenthMult() : 1) * S.next * (destiny ? 50 : 1);
   S.next = 1;
-  const a = rollAura(luck), shiny = Math.random() < shinyChance();
+  let a = rollAura(luck);
+  if (destiny) { S.destiny = 0; if (tierOf(a.r) < 2) a = pick(AURAS.filter(x => eligible(x, S.biome) && tierOf(x.r) === 2)) || a; }
+  else S.destiny = Math.min(DESTINY_MAX, S.destiny + (isNight() ? 2 : 1));
+  const shiny = Math.random() < shinyChance();
   const g = gnt(); let extra = null;
   if (g && g.dbl && Math.random() < g.dbl) extra = rollAura(baseLuck());
   S.rolls++;
-  const tier = tierOf(a.r);
-  let dur = 1.6 / speed(); if (S.set.quick && tier < 3 && !shiny) dur *= .4; if (tier >= 3) dur = Math.max(dur, 1.25);
-  Object.assign(RS, { on: true, t: 0, dur: Math.max(.3, dur), res: a, extra, nt: 0, isNew: !S.found[a.id], shiny, sus: 0 });
+  const tier = tierOf(a.r), isNew = !S.found[a.id];
+  let dur = 1.5 / speed(); if (S.set.quick && tier < 3 && !shiny) dur *= .4; if (tier >= 2) dur = Math.max(dur, .9 + tier * .12); if (destiny) dur = Math.max(dur, 2);
+  Object.assign(RS, { on: true, t: 0, dur: Math.max(.3, dur), res: a, extra, nt: 0, isNew, shiny, sus: 0, destiny, tease: null });
   grant(a, shiny); if (extra) grant(extra, false);
-  const coins = Math.round((1 + tier * tier) * coinMul()); S.coin += coins; S.stats.coins += coins;
+  const coins = Math.round((1 + tier * tier) * coinMul()); S.coin += coins; S.stats.coins += coins; RS.coins = coins;
+  gainXP(XP_TIER[tier] * (isNew ? 2 : 1) * (shiny ? 3 : 1));
+  if (destiny || Math.random() < .045) spawnChest(destiny ? 'gold' : null);
   dropMat(); checkQuests(); save(); updHUD();
-  $('#rollBtn').classList.add('busy');
+  $('#rollBtn').classList.add('busy'); $('#rollBtn').classList.remove('destiny');
+  if (destiny) { banner('운명의 굴림', 'DESTINY ROLL', '#ffd36a', '행운 ×50 · 레어 이상 확정!'); AU.tone(392, 1.4, 'triangle', .12, 784); }
 }
 function grant(a, shiny) {
   S.auras[a.id] = (S.auras[a.id] || 0) + 1; S.found[a.id] = 1;
   if (shiny) { S.shiny[a.id] = (S.shiny[a.id] || 0) + 1; S.stats.shinies++; }
   if (!S.best || a.r > AMAP[S.best].r) S.best = a.id;
   if (!S.eq) S.eq = a.id;
+  else if (S.set.autoEq && a.r > AMAP[S.eq].r) { S.eq = a.id; S.eqShiny = !!shiny; }
+  else if (S.set.autoEq && shiny && S.eq === a.id) S.eqShiny = true;
   if (tierOf(a.r) >= 3 || shiny) { S.log.unshift({ id: a.id, at: Date.now(), b: S.biome, n: S.rolls, sh: shiny ? 1 : 0 }); S.log.length = Math.min(S.log.length, 30); }
   S.recent.unshift({ id: a.id, sh: shiny ? 1 : 0 }); S.recent.length = Math.min(S.recent.length, 8);
 }
@@ -219,12 +236,25 @@ function updRoll(dt) {
   if (!RS.on) return;
   RS.t += dt; const k = RS.t / RS.dur, rt = tierOf(RS.res.r);
   $('#rollBar').style.width = Math.min(100, k * 100) + '%';
-  RS.sus = rt >= 3 && k > .5 ? Math.min(1, (k - .5) / .35) * Math.min(1, .45 + (rt - 3) * .2) : 0;
+  RS.sus = rt >= 2 && k > .5 ? Math.min(1, (k - .5) / .4) * Math.min(1, .35 + (rt - 2) * .16) : 0;
+  CAM.zt = 1 + .05 * Math.min(1, k * 2) + RS.sus * .08;
+  if (rt >= 4 && k > .6) CAM.shake = Math.max(CAM.shake, (k - .6) * (rt - 2) * 2.2);
   if (k < 1 && RS.t >= RS.nt) {
-    const a = teasePick(k); setName(a, false); AU.tick(k);
-    RS.nt = RS.t + (.045 + .22 * k * k) * clamp(RS.dur / 1.6, .35, 1) * (RS.sus ? 1.6 : 1);
+    const a = teasePick(k); RS.tease = a; setName(a, false); AU.tick(k);
+    RS.nt = RS.t + (.05 + .2 * k * k) * clamp(RS.dur / 1.5, .35, 1) * (RS.sus ? 1.5 : 1);
   }
   if (k >= 1) { RS.on = false; RS.sus = 0; finishRoll(); }
+}
+function gainXP(n) {
+  S.xp += n; let ups = 0;
+  while (S.xp >= xpNeed(S.lv)) { S.xp -= xpNeed(S.lv); S.lv++; ups++; const rw = lvReward(S.lv); setTimeout(() => levelUp(S.lv, rw), 1900 + ups * 400); giveReward(rw); }
+}
+function levelUp(lv, rw) {
+  const el = $('#lvup'); el.innerHTML = `<small>LEVEL UP</small><b>Lv.${lv}</b><span>${rwText(rw)} · 영구 행운 +1%</span>`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  AU.chime(5); [523, 659, 784, 1046].forEach((f, i) => AU.tone(f, .5, 'triangle', .08, null, i * .09)); SHOW.joy = 1.4; buzz([30, 30, 60]);
+  const { cx, by, R } = orbPos(); for (let i = 0; i < 40; i++) BURST.P.push({ x: rnd(-.6, .6), y: rnd(.5, 1.4), vx: rnd(-.6, .6), vy: rnd(-4, -2), l: 0, m: rnd(.8, 1.4), c: pick(['#ffd36a', '#ffffff', '#ffe9a8']), s: .05 });
+  updHUD();
 }
 function finishRoll() {
   const a = RS.res, tier = tierOf(a.r), sh = RS.shiny;
@@ -232,6 +262,11 @@ function finishRoll() {
   showResult(a, RS.isNew, sh); renderRecent();
   AU.chime(tier); if (sh) AU.shiny();
   const { cx, by, R } = orbPos(); BURST.fire(a, tier, sh);
+  SHOW.a = a; SHOW.sh = sh; SHOW.until = T + 1.8 + tier * .2; SHOW.joy = tier >= 2 || RS.isNew ? 1.3 : 0;
+  CAM.hit = tier >= 3 ? .06 + tier * .015 : 0; CAM.flash = tier >= 1 ? Math.min(.9, .12 + tier * .1) : 0; CAM.fc = sh ? '#ffffff' : TIERS[tier].c;
+  CAM.shake = tier >= 2 ? 2 + tier * 2.6 : 0; CAM.z = 1 + Math.min(.16, tier * .025); CAM.zt = 1;
+  if (S.set.cut >= 99 || tier < S.set.cut) popReveal(a, tier, RS.isNew, sh);
+  if (RS.coins >= 5 || tier >= 2) flyCoins(cx, by, Math.min(14, 2 + tier * 2));
   if (tier >= 3 || sh) buzz(tier >= 5 ? [40, 40, 80] : 30);
   if (RS.extra) setTimeout(() => toast(`오류 장갑 발동! 추가 획득 · <b style="color:${RS.extra.c}">${RS.extra.n}</b>`), 300);
   if (sh) setTimeout(() => toast(`✦ <b class="rainbow">빛나는 ${a.n}</b> 획득! (빛나는 확률 1/${fmt(1 / shinyChance())})`), 200);
@@ -245,7 +280,7 @@ function playCut(a, opt, done) {
   CUT.start(a, Object.assign({ boom: () => { AU.boom(); AU.chime(tier); if (tier >= 5) AU.shatter(); if (opt.shiny) AU.shiny(); buzz(120); }, fake: () => AU.tone(200, .3, 'sine', .2, 60), done }, opt));
 }
 function afterRoll() {
-  $('#rollBtn').classList.remove('busy'); updHUD();
+  $('#rollBtn').classList.remove('busy'); $('#rollBtn').classList.toggle('destiny', S.destiny >= DESTINY_MAX); updHUD();
   if (RS.auto) setTimeout(() => { if (RS.auto) startRoll(); }, 120);
 }
 function setName(a, final) {
@@ -365,7 +400,110 @@ function catchStar() {
   else { S.pots.dice = (S.pots.dice || 0) + 1; toast(`별똥별 안에서 ${potIcon('dice', 16)} <b>행운 주사위</b>를 찾았다!`); }
   floatChip('✦ 별똥별 ✦'); checkQuests(); save(); updHUD();
 }
-cv.addEventListener('pointerdown', e => { if (STAR && Math.hypot(e.clientX - STAR.x, e.clientY - STAR.y) < 48) catchStar(); });
+cv.addEventListener('pointerdown', e => {
+  if (STAR && Math.hypot(e.clientX - STAR.x, e.clientY - STAR.y) < 48) return catchStar();
+  const { R } = orbPos();
+  for (const c of CHESTS) if (!c.open && Math.hypot(e.clientX - c.x, e.clientY - (c.y - R * .4)) < R * .9) return openChest(c);
+});
+
+/* ── 획득 연출 카드 ── */
+function popReveal(a, tier, isNew, sh) {
+  if (tier < 1 && !isNew && !sh) return;
+  const el = $('#reveal');
+  el.style.setProperty('--tc', TIERS[tier].c); el.style.setProperty('--ac', a.c);
+  el.className = 't' + tier + (sh ? ' shiny' : '');
+  el.innerHTML = `<div class="rv">${orbCSS(a, 54, sh)}<div><i>${a.fusion ? '융합 · ' : ''}${TIERS[tier].n}</i><b class="${sh ? 'rainbow' : ''}">${sh ? '✦ ' : ''}${a.n}</b><small>1 / ${fmt(a.r)}</small></div>${isNew ? '<em>NEW!</em>' : ''}</div>`;
+  void el.offsetWidth; el.classList.add('show');
+  clearTimeout(popReveal.tm); popReveal.tm = setTimeout(() => el.classList.remove('show'), 1300 + tier * 150);
+}
+
+/* ── 날아가는 주화 ── */
+const FLY = [];
+function flyCoins(x, y, n) {
+  const r = $('#coinVal').getBoundingClientRect(), tx = r.left + 6, ty = r.top + r.height / 2;
+  for (let i = 0; i < n; i++) FLY.push({ x: x + rnd(-20, 20), y: y + rnd(-20, 20), sx: x + rnd(-60, 60), sy: y - rnd(40, 120), tx, ty, l: -i * .04, m: rnd(.6, .85) });
+}
+function drawFly(ctx, dt) {
+  for (let i = FLY.length - 1; i >= 0; i--) {
+    const f = FLY[i]; f.l += dt; if (f.l < 0) continue; const k = Math.min(1, f.l / f.m), e = k * k;
+    const x = (1 - k) * (1 - k) * f.x + 2 * (1 - k) * k * f.sx + k * k * f.tx, y = (1 - k) * (1 - k) * f.y + 2 * (1 - k) * k * f.sy + k * k * f.ty;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(ctx, '#ffd36a', x, y, 12, .8); ctx.restore();
+    ctx.fillStyle = '#ffcf4a'; ctx.strokeStyle = '#a8761a'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(x, y, 5 * Math.abs(Math.cos(f.l * 12)) + 1, 5, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    if (k >= 1) { FLY.splice(i, 1); const c = $('#coinBox'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); if (Math.random() < .5) AU.tone(1800 + rnd(0, 400), .05, 'square', .015); }
+  }
+}
+
+/* ── 보물 상자 ── */
+const CHESTS = [];
+function spawnChest(type) {
+  if (CHESTS.length >= 3) return;
+  if (!type) { const r = Math.random() * 100; type = r < CHEST.gold.w ? 'gold' : r < CHEST.gold.w + CHEST.silver.w ? 'silver' : 'wood'; }
+  const { cx, by, R } = orbPos(), side = Math.random() < .5 ? -1 : 1;
+  const x = cx + side * rnd(R * 1.8, Math.min(W * .36, R * 2.8)), gy = by + R * 1.75 + rnd(-R * .15, R * .35);
+  CHESTS.push({ type, x, y: -40, gy, vy: 0, l: 0, open: 0, ot: 0, bounced: 0, life: 0 });
+  AU.tone(660, .15, 'triangle', .06, 990);
+}
+function updChests(dt) {
+  for (let i = CHESTS.length - 1; i >= 0; i--) {
+    const c = CHESTS[i]; c.l += dt;
+    if (c.y < c.gy || c.vy < 0) { c.vy += 1800 * dt; c.y += c.vy * dt; if (c.y >= c.gy) { c.y = c.gy; if (c.bounced < 2) { c.vy = -c.vy * .35; c.bounced++; AU.tone(160, .08, 'sine', .08); } else c.vy = 0; } }
+    if (!c.open) { c.life += dt; if ((RS.auto && c.life > 3.5) || c.life > 45) openChest(c); }
+    else { c.ot += dt; if (c.ot > 1.4) CHESTS.splice(i, 1); }
+  }
+}
+function drawChest(ctx, c, R) {
+  const C = CHEST[c.type], s = R * (c.type === 'gold' ? .78 : .64), x = c.x, y = c.y, t = T;
+  ctx.save(); ctx.globalAlpha = c.open ? Math.max(0, 1 - Math.max(0, c.ot - .8) / .6) : 1;
+  ctx.globalCompositeOperation = 'lighter'; glow(ctx, C.glow, x, y - s * .5, s * (2.2 + .3 * Math.sin(t * 4)), c.open ? .9 : .45); ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, y + s * .05, s * 1.1, s * .25, 0, 0, TAU); ctx.fill();
+  const wob = c.open ? 0 : Math.sin(t * 9) * (Math.sin(t * 1.3) > .7 ? .08 : 0);
+  ctx.translate(x, y); ctx.rotate(wob);
+  let g = ctx.createLinearGradient(0, -s, 0, 0); g.addColorStop(0, C.c); g.addColorStop(1, C.c2);
+  ctx.fillStyle = g; ctx.fillRect(-s, -s * .9, s * 2, s * .9); ctx.strokeStyle = 'rgba(30,15,0,.75)'; ctx.lineWidth = 2; ctx.strokeRect(-s, -s * .9, s * 2, s * .9);
+  ctx.fillStyle = mix(C.c2, '#000000', .3); ctx.fillRect(-s * .72, -s * .9, s * .16, s * .9); ctx.fillRect(s * .56, -s * .9, s * .16, s * .9);
+  // 뚜껑
+  ctx.save(); ctx.translate(0, -s * .9); ctx.rotate(-Math.min(1, c.ot * 4) * 1.9 * (c.open ? 1 : 0));
+  g = ctx.createLinearGradient(0, -s * .6, 0, 0); g.addColorStop(0, mix(C.c, '#ffffff', .3)); g.addColorStop(1, C.c);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(-s, -s * .3); ctx.quadraticCurveTo(0, -s * .85, s, -s * .3); ctx.lineTo(s, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(30,15,0,.75)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = mix(C.c2, '#000000', .3); ctx.fillRect(-s * .72, -s * .55, s * .16, s * .55); ctx.fillRect(s * .56, -s * .55, s * .16, s * .55);
+  ctx.restore();
+  if (!c.open) { ctx.fillStyle = c.type === 'gold' ? '#ff4a8a' : c.type === 'silver' ? '#4ad8ff' : '#ffd36a'; ctx.beginPath(); ctx.arc(0, -s * .85, s * .16, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-s * .05, -s * .9, s * .05, 0, TAU); ctx.fill();
+    ctx.globalAlpha = .55 + .45 * Math.sin(t * 5); ctx.fillStyle = '#ffffff'; ctx.font = `900 ${Math.round(s * .55)}px 'Noto Sans KR'`; ctx.textAlign = 'center'; ctx.fillText('TAP!', 0, -s * 2); }
+  ctx.restore();
+}
+function openChest(c) {
+  if (c.open) return; c.open = 1; c.ot = 0; S.stats.chests++;
+  const out = [], C = CHEST[c.type];
+  const coin = Math.round((c.type === 'gold' ? rnd(300, 700) : c.type === 'silver' ? rnd(80, 200) : rnd(20, 60)) * (1 + S.lv * .03));
+  S.coin += coin; S.stats.coins += coin; out.push(`${coinI()} ${fmt(coin)}`);
+  const mats = Object.keys(MATS).filter(k => k !== 'voiddust' && k !== 'byte');
+  const mn = c.type === 'gold' ? 6 : c.type === 'silver' ? 4 : Math.random() < .35 ? 2 : 0;
+  if (mn) { const m = c.type === 'gold' ? pick(['starfrag', 'ember', 'blossom', 'sunglass']) : pick(mats); S.mats[m] = (S.mats[m] || 0) + mn; out.push(`${icon(MATS[m].ic, MATS[m].c, 16)} ${MATS[m].n} ×${mn}`); }
+  if (c.type === 'gold' || (c.type === 'silver' && Math.random() < .4)) { const pid = c.type === 'gold' ? pick(['fortune', 'starlit', 'haste', 'dice', 'shinydust']) : pick(['lucky', 'swift', 'dice']); S.pots[pid] = (S.pots[pid] || 0) + 1; out.push(`${potIcon(pid, 16)} ${POTIONS[pid].n}`); }
+  if (c.type === 'gold' && Math.random() < .3) { S.mats.voiddust = (S.mats.voiddust || 0) + 5; out.push(`${icon('void', '#9a6cff', 16)} 공허 가루 ×5`); }
+  toast(`<b style="color:${C.c}">${C.n}</b> · ${out.join(' · ')}`);
+  AU.chime(c.type === 'gold' ? 5 : c.type === 'silver' ? 3 : 1); AU.coin(); buzz(25);
+  flyCoins(c.x, c.y - 20, c.type === 'gold' ? 16 : c.type === 'silver' ? 10 : 6);
+  for (let i = 0; i < (c.type === 'gold' ? 40 : 18); i++) SPARK.push({ x: c.x, y: c.y - 20, vx: rnd(-160, 160), vy: rnd(-380, -120), l: 0, m: rnd(.6, 1.1), c: pick([C.glow, '#ffffff', '#ffd36a']) });
+  checkQuests(); save(); updHUD();
+}
+const SPARK = [];
+function drawSparks(ctx, dt) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = SPARK.length - 1; i >= 0; i--) { const p = SPARK[i]; p.l += dt; if (p.l > p.m) { SPARK.splice(i, 1); continue; } p.vy += 600 * dt; p.x += p.vx * dt; p.y += p.vy * dt; glow(ctx, p.c, p.x, p.y, 8, 1 - p.l / p.m); }
+  ctx.restore();
+}
+
+/* ── 콤보 ── */
+function updCombo() {
+  const now = performance.now() / 1000, el = $('#combo');
+  if (COMBO.n && !RS.on && !CUT.on && now - COMBO.t > 4.5) { if (COMBO.n >= 10) floatChip(`콤보 ${COMBO.n} 종료`); COMBO.n = 0; updHUD(); }
+  if (COMBO.n >= 3) {
+    el.classList.remove('hide'); const left = Math.max(0, 1 - (now - COMBO.t) / 4.5);
+    el.innerHTML = `<b>${COMBO.n}</b><small>COMBO</small><span>행운 +${Math.round(comboBonus() * 100)}%</span><i style="width:${(RS.on || CUT.on ? 1 : left) * 100}%"></i>`;
+    el.classList.toggle('hot', COMBO.n >= 25); el.classList.toggle('max', COMBO.n >= 50);
+  } else el.classList.add('hide');
+}
 
 /* ── HUD ── */
 function updHUD() {
@@ -373,7 +511,7 @@ function updHUD() {
   $('#biomeChip').style.setProperty('--bc', B.c); $('#biomeName').textContent = B.n;
   $('#luckVal').textContent = fmtX(baseLuck()); $('#spdVal').textContent = fmtX(speed()); $('#coinVal').textContent = fmt(S.coin);
   const ev = bonusEvery(), left = ev - (S.rolls % ev);
-  $('#tenth').innerHTML = left === 1 ? `<b class="hot">다음 굴림 행운 ×${tenthMult()}!</b>` : `${tenthMult()}배 보너스까지 <b>${left}</b>회 · 굴림 ${fmt(S.rolls)}`;
+  $('#tenth').innerHTML = left === 1 ? `<b class="hot">다음 굴림 행운 ×${tenthMult()}!</b>` : `${tenthMult()}배 보너스까지 <b>${left}</b>회`;
   let h = '';
   for (const id in S.active) { const s = (S.active[id] - Date.now()) / 1000; if (s > 0 && POTIONS[id]) h += `<div class="buff">${potIcon(id, 18)}${POTIONS[id].n} <b>${mmss(s)}</b></div>`; }
   if (S.starBoost > Date.now()) h += `<div class="buff hot">✦ 별똥별 축복 <b>${mmss((S.starBoost - Date.now()) / 1000)}</b></div>`;
@@ -381,6 +519,9 @@ function updHUD() {
   if (S.eqG) h += `<div class="buff">${icon('glove', GAUNTLETS[S.eqG].c, 18)}${GAUNTLETS[S.eqG].n}</div>`;
   for (const id of S.eqC) if (CHARMS[id]) h += `<div class="buff">${icon(CHARMS[id].ic, CHARMS[id].c, 18)}${CHARMS[id].n}</div>`;
   $('#buffs').innerHTML = h;
+  $('#lvNum').textContent = S.lv; $('#lvBar').style.width = (S.xp / xpNeed(S.lv) * 100) + '%'; $('#lvTxt').textContent = `${fmt(S.xp)} / ${fmt(xpNeed(S.lv))}`;
+  const dk = S.destiny / DESTINY_MAX; $('#dsBar').style.width = (dk * 100) + '%'; $('#dsTxt').textContent = dk >= 1 ? '운명의 굴림 준비!' : `운명 ${S.destiny}/${DESTINY_MAX}`; $('#destiny').classList.toggle('full', dk >= 1);
+  $('#rollBtn').classList.toggle('destiny', dk >= 1 && !RS.on);
   $('#autoBtn').classList.toggle('on', RS.auto); $('#quickBtn').classList.toggle('on', S.set.quick);
   $('#qdot').style.display = QUESTS.some(q => !S.quests[q.id] && qDone(q)) ? 'block' : 'none';
 }
@@ -849,6 +990,8 @@ function pLuck() {
       <h3 class="sub">그 밖의 수치</h3><div class="logl">
       <div><b>${bonusEvery()}번째 굴림</b><span>행운 ×${tenthMult()}</span></div>
       <div><b>굴림 속도</b><span>${fmtX(speed())}</span></div>
+      <div><b>운명 게이지</b><span>${S.destiny}/${DESTINY_MAX} · 가득 차면 행운 ×50 + 레어 확정</span></div>
+      <div><b>콤보</b><span>연속으로 굴릴 때마다 +1% (최대 +50%)</span></div>
       <div><b>빛나는 변이 확률</b><span>1 / ${fmt(1 / shinyChance())}</span></div>
       <div><b>굴림당 주화</b><span>커먼 ${fmt(coinMul())} · 레전더리 ${fmt(17 * coinMul())}</span></div>
       <div><b>지금 시간</b><span>${isNight() ? '☾ 밤' : '☀ 낮'} · ${mmss(dayLeft())} 남음</span></div></div>`));
@@ -865,7 +1008,7 @@ function pSet() {
     const tg = k => `<button class="tg ${S.set[k] ? 'on' : ''}" data-k="${k}"><i></i></button>`;
     b.appendChild(h(`<h3 class="sub">옵션</h3>
       ${row('효과음', tg('sound'))}${row('배경 음악', tg('music'))}${row('진동', tg('haptic'))}
-      ${row('빠른 굴림 (에픽 미만 연출 단축)', tg('quick'))}${row('저사양 모드', tg('low'))}
+      ${row('더 희귀한 오라 자동 장착', tg('autoEq'))}${row('빠른 굴림 (에픽 미만 연출 단축)', tg('quick'))}${row('저사양 모드', tg('low'))}
       ${row('컷신 재생', `<select id="cutSel"><option value="3">에픽 이상</option><option value="4">레전더리 이상</option><option value="5">미식 이상</option><option value="6">엑절티드 이상</option><option value="99">끄기</option></select>`)}
       <h3 class="sub">저장</h3>
       <div class="brow2"><button class="btn sm" id="expBtn">저장 코드 복사</button><button class="btn sm ghost" id="impBtn">코드로 불러오기</button></div>
@@ -914,41 +1057,72 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && RS
 
 /* ── 루프 ── */
 let last = performance.now(), secAcc = 0;
+const HTEASE = new AuraFX(); HTEASE.hero = true; afx.hero = true;
 function frame(now) {
-  const dt = Math.min(.05, (now - last) / 1000); last = now; T += dt;
+  let dt = Math.min(.05, (now - last) / 1000); last = now;
+  const rdt = dt; if (CAM.hit > 0) { CAM.hit -= dt; dt *= .05; }
+  T += dt;
   const q = S.set.low ? .5 : 1;
+  const { R, cx, by } = orbPos(), cy = by;
+  // 카메라
+  CAM.z += (CAM.zt - CAM.z) * Math.min(1, rdt * (RS.on ? 3 : 6)); CAM.shake = Math.max(0, CAM.shake - rdt * 18);
+  const sx = (Math.random() - .5) * CAM.shake, sy = (Math.random() - .5) * CAM.shake;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  bfx.update(dt, W, H, T); bfx.draw(ctx, W, H, T);
+  bfx.update(dt, W, H, T); bfx.drawBack(ctx, W, H, T);
+  ctx.save(); ctx.translate(cx + sx, cy + sy); ctx.scale(CAM.z, CAM.z); ctx.translate(-cx, -cy);
   drawStar(ctx);
-  const { R, cx, by } = orbPos(), cy = by + Math.sin(T * 1.4) * R * .07;
-  const a = S.eq ? AMAP[S.eq] : null; afx.set(a, !!(a && S.eqShiny && S.shiny[a.id]));
-  if (RS.sus > 0) { // 희귀 결과 직전 긴장감
-    const tc = TIERS[tierOf(RS.res.r)].c, g = ctx.createRadialGradient(cx, cy, R * 1.2, cx, cy, Math.max(W, H) * .7);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${.75 * RS.sus})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(ctx, tc, cx, cy, R * (2.5 + RS.sus * 2 + Math.sin(T * 30) * .2), .5 * RS.sus); ctx.restore();
-  }
-  drawAltar(ctx, cx, by + R * 1.75, R, a, T);
-  if (a) { afx.update(dt, T, q); afx.drawBack(ctx, cx, cy, R, T); }
-  if (RS.on) {
-    const k = RS.t / RS.dur; ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 3; i++) { ctx.globalAlpha = .5; ctx.strokeStyle = $('#rName').style.color || '#fff'; ctx.lineWidth = R * .05; ctx.beginPath(); ctx.arc(cx, cy, R * (1.25 + i * .18), T * (6 - i) * (1 - k * .5), T * (6 - i) * (1 - k * .5) + 1.6); ctx.stroke(); }
+  // 보이는 오라: 굴리는 중 → 미리보기, 직후 → 결과, 평소 → 장착
+  const eqA = S.eq ? AMAP[S.eq] : null;
+  let shownA = eqA, shownSh = !!(eqA && S.eqShiny && S.shiny[eqA.id]), fx = afx;
+  if (RS.on && RS.tease) { shownA = RS.tease; shownSh = false; fx = HTEASE; }
+  else if (SHOW.a && T < SHOW.until) { shownA = SHOW.a; shownSh = SHOW.sh; }
+  fx.set(shownA, shownSh);
+  const k = RS.on ? RS.t / RS.dur : 0, rt = RS.on ? tierOf(RS.res.r) : 0;
+  if (RS.sus > 0) { // 희귀 직전: 어둠 + 등급색 빛기둥
+    const tc = rt >= 7 ? hsl(T * 200, 1, .65) : TIERS[rt].c;
+    ctx.save(); ctx.fillStyle = `rgba(0,0,10,${.7 * RS.sus})`; ctx.fillRect(cx - W, cy - H, W * 2, H * 2);
+    ctx.globalCompositeOperation = 'lighter';
+    const bw = R * (.6 + RS.sus * 1.1 + Math.sin(T * 25) * .08), g = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
+    g.addColorStop(0, rgba(tc, 0)); g.addColorStop(.5, rgba(tc, .55 * RS.sus)); g.addColorStop(1, rgba(tc, 0)); ctx.fillStyle = g; ctx.fillRect(cx - bw, cy - H, bw * 2, H + R * 1.6);
+    glow(ctx, tc, cx, cy, R * (2.5 + RS.sus * 2.5), .55 * RS.sus);
+    if (rt >= 4 && Math.random() < RS.sus * .35) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = .9; ctx.beginPath(); let lx = cx + rnd(-W * .4, W * .4), ly = cy - H * .5; ctx.moveTo(lx, ly); for (let i = 0; i < 8; i++) { lx += rnd(-30, 30); ly += H * .07; ctx.lineTo(lx, ly); } ctx.stroke(); }
     ctx.restore();
   }
-  drawOrb(ctx, cx, cy, R, a, T, RS.on ? 1 : 0);
-  if (a) afx.drawFront(ctx, cx, cy, R, T);
+  drawStage(ctx, W, H, cx, cy + R * 1.45, R, bfx.cur, shownA, T, RS.on ? .3 + k * .7 : 0, bfx.nk);
+  if (shownA) { fx.update(dt, T, q); fx.drawBack(ctx, cx, cy, R, T); }
+  if (RS.on) { // 소환 고리
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const col = RS.tease ? RS.tease.c : '#ffffff';
+    for (let i = 0; i < 3; i++) { ctx.globalAlpha = .55; ctx.strokeStyle = col; ctx.lineWidth = R * .05; const sp = T * (7 - i) * (1 - k * .4); ctx.beginPath(); ctx.ellipse(cx, cy, R * (1.4 + i * .22), R * (1.4 + i * .22) * .4, 0, sp, sp + 1.8); ctx.stroke(); }
+    ctx.restore();
+  }
+  for (const c of CHESTS) if (c.y < cy + R * 1.4) drawChest(ctx, c, R);
+  SHOW.joy = Math.max(0, SHOW.joy - dt);
+  const hero = drawHero(ctx, cx, cy, R, shownA, T, { raise: RS.on ? ease(Math.min(1, k * 3)) : Math.max(0, SHOW.joy - .6), joy: Math.min(1, SHOW.joy) });
+  if (RS.on && RS.tease) { // 손 위의 주사위 오브
+    const ox = cx, oy = cy - R * 2.35 - Math.sin(T * 8) * R * .05, orr = R * (.24 + k * .08);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(ctx, RS.tease.c, ox, oy, orr * 4, .8); ctx.restore();
+    drawOrb(ctx, ox, oy, orr, RS.tease, T, 1);
+  }
+  if (shownA) fx.drawFront(ctx, cx, cy, R, T);
+  for (const c of CHESTS) if (c.y >= cy + R * 1.4) drawChest(ctx, c, R);
   BURST.draw(ctx, cx, cy, R, dt);
-  updRoll(dt); tickStar(dt);
-  CUT.update(dt, W, H, DPR);
-  AU.music(dt);
+  drawSparks(ctx, dt);
+  ctx.restore();
+  bfx.drawFront(ctx, W, H, T);
+  if (CAM.flash > 0) { ctx.save(); ctx.globalAlpha = CAM.flash; ctx.fillStyle = CAM.fc; ctx.fillRect(0, 0, W, H); ctx.restore(); CAM.flash = Math.max(0, CAM.flash - rdt * 2.4); }
+  drawFly(ctx, rdt);
+  updRoll(dt); tickStar(dt); updChests(dt); updCombo();
+  CUT.update(rdt, W, H, DPR);
+  AU.music(rdt);
   for (const p of SH.previews) {
     if (!p.c.isConnected) continue;
     const w = p.c.clientWidth, hh = p.c.clientHeight; if (!w) continue;
     const d = Math.min(DPR, 2); if (p.c.width !== Math.round(w * d)) { p.c.width = Math.round(w * d); p.c.height = Math.round(hh * d); }
     const c2 = p.ctx; c2.setTransform(d, 0, 0, d, 0, 0); c2.clearRect(0, 0, w, hh);
-    const g = c2.createRadialGradient(w / 2, hh / 2, 0, w / 2, hh / 2, w * .7); g.addColorStop(0, '#1a1440'); g.addColorStop(1, '#07061a'); c2.fillStyle = g; c2.fillRect(0, 0, w, hh);
-    const r = Math.min(hh * .17, 46); p.fx.update(dt, T, q); p.fx.drawBack(c2, w / 2, hh / 2, r, T); drawOrb(c2, w / 2, hh / 2, r, p.a, T); p.fx.drawFront(c2, w / 2, hh / 2, r, T);
+    const g = c2.createLinearGradient(0, 0, 0, hh); g.addColorStop(0, '#2a2270'); g.addColorStop(1, '#0c0a2a'); c2.fillStyle = g; c2.fillRect(0, 0, w, hh);
+    const r = Math.min(hh * .14, 40), pcy = hh * .5; p.fx.hero = true; p.fx.update(rdt, T, q); p.fx.drawBack(c2, w / 2, pcy, r, T); drawHero(c2, w / 2, pcy, r, p.a, T, {}); p.fx.drawFront(c2, w / 2, pcy, r, T);
   }
-  secAcc += dt;
+  secAcc += rdt;
   if (secAcc >= 1) {
     secAcc -= 1; S.stats.play++; tickBiome(); updBiomeTime(); tickDay(); tickMerchant();
     let changed = false; for (const id in S.active) if (S.active[id] <= Date.now()) { delete S.active[id]; changed = true; }

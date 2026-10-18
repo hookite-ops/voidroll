@@ -15,25 +15,25 @@ const TIERS = [
 function tierOf(r) { let t = 0; for (let i = 0; i < TIERS.length; i++) if (r >= TIERS[i].min) t = i; return t; }
 
 const BIOMES = {
-  normal:   { n: '평온',      en: 'CALM',      c: '#8c7cff', w: 0,   dur: [150, 240], mat: 'glim',     sky: ['#07061c', '#17123f', '#33266a'], ground: '#120d2e', night: 1,
+  normal:   { n: '평온',      en: 'CALM',      c: '#8c7cff', w: 0,   dur: [150, 240], mat: 'glim',     sky: ['#24206e', '#5a4cc0', '#b8a4f0'], ground: '#2c2470', grass: '#7a6cf0', prop: 'crystal',
               d: '고요한 기본 하늘. 날씨 한정 오라는 나오지 않아요.' },
-  windy:    { n: '질풍',      en: 'WINDY',     c: '#7fe8d6', w: 30,  dur: [90, 150],  mat: 'feather',  sky: ['#0a1c26', '#18414e', '#4f8f96'], ground: '#0c2629',
+  windy:    { n: '질풍',      en: 'WINDY',     c: '#7fe8d6', w: 30,  dur: [90, 150],  mat: 'feather',  sky: ['#1e6a8a', '#58b8c8', '#d0f6ea'], ground: '#1f5a50', grass: '#6ae0b0', prop: 'tree',
               d: '바람의 오라가 3~4배 잘 나와요. 회오리·하늘군주 출현.' },
-  rainy:    { n: '호우',      en: 'RAINY',     c: '#6fa8ff', w: 30,  dur: [90, 150],  mat: 'pearl',    sky: ['#050a16', '#101e36', '#263852'], ground: '#08101e',
+  rainy:    { n: '호우',      en: 'RAINY',     c: '#6fa8ff', w: 30,  dur: [90, 150],  mat: 'pearl',    sky: ['#1c2c50', '#3e5c84', '#8aa4c0'], ground: '#1a2c44', grass: '#5a8ab0', prop: 'tree',
               d: '물·번개 오라 확률 증가. 장마·해일 출현.' },
-  snowy:    { n: '설원',      en: 'SNOWY',     c: '#d6ecff', w: 22,  dur: [90, 150],  mat: 'frost',    sky: ['#16243e', '#45668c', '#a3bfd8'], ground: '#7f97b3',
+  snowy:    { n: '설원',      en: 'SNOWY',     c: '#d6ecff', w: 22,  dur: [90, 150],  mat: 'frost',    sky: ['#4a7ac0', '#9cc0ee', '#f0f8ff'], ground: '#a8c4e4', grass: '#ffffff', prop: 'pine',
               d: '서리 오라 확률 증가. 눈꽃·빙결여왕 출현.' },
-  sand:     { n: '모래폭풍',  en: 'SANDSTORM', c: '#ffb45a', w: 18,  dur: [90, 140],  mat: 'sunglass', sky: ['#261208', '#6e3d18', '#d08f48'], ground: '#4e2c10',
+  sand:     { n: '모래폭풍',  en: 'SANDSTORM', c: '#ffb45a', w: 18,  dur: [90, 140],  mat: 'sunglass', sky: ['#8a3a1a', '#e08a40', '#ffd896'], ground: '#a8642a', grass: '#ffc070', prop: 'cactus',
               d: '태양·모래 오라 확률 증가. 신기루·파라오 출현.' },
-  starfall: { n: '유성우',    en: 'STARFALL',  c: '#ffe08a', w: 10,  dur: [80, 130],  mat: 'starfrag', sky: ['#020210', '#0a0830', '#251757'], ground: '#090720', night: 1,
+  starfall: { n: '유성우',    en: 'STARFALL',  c: '#ffe08a', w: 10,  dur: [80, 130],  mat: 'starfrag', sky: ['#08083a', '#2a1a70', '#7040b0'], ground: '#1a1250', grass: '#a88aff', prop: 'crystal', night: 1,
               d: '별 오라 확률 크게 증가. 유성·별의 왕관 출현.' },
-  hell:     { n: '지옥',      en: 'HELL',      c: '#ff4a2a', w: 6,   dur: [70, 120],  mat: 'ember',    sky: ['#160103', '#440907', '#9a2810'], ground: '#1e0303',
+  hell:     { n: '지옥',      en: 'HELL',      c: '#ff4a2a', w: 6,   dur: [70, 120],  mat: 'ember',    sky: ['#40060a', '#9a1c12', '#ff7a30'], ground: '#3a0a08', grass: '#ff5a2a', prop: 'lava',
               d: '불·피 오라 확률 증가. 지옥불·악마군주 출현.' },
-  sakura:   { n: '벚꽃비',    en: 'BLOSSOM',   c: '#ff9ac8', w: 9,   dur: [80, 130],  mat: 'blossom',  sky: ['#1a0c22', '#4a2448', '#c8789a'], ground: '#2a1028',
+  sakura:   { n: '벚꽃비',    en: 'BLOSSOM',   c: '#ff9ac8', w: 9,   dur: [80, 130],  mat: 'blossom',  sky: ['#6a4aa8', '#e094c4', '#ffe0ee'], ground: '#7a4a7a', grass: '#ffb0d4', prop: 'sakura',
               d: '꽃잎 오라 확률 증가. 꽃놀이·봄의 여왕 출현.' },
-  glitch:   { n: '글리치',    en: 'GLITCHED',  c: '#ff2a6d', w: 1.5, dur: [60, 100],  mat: 'byte',     sky: ['#04040a', '#170926', '#08272a'], ground: '#000000', night: 1,
+  glitch:   { n: '글리치',    en: 'GLITCHED',  c: '#ff2a6d', w: 1.5, dur: [60, 100],  mat: 'byte',     sky: ['#0a0a22', '#2a0a50', '#0a5050'], ground: '#0a0a1a', grass: '#2affd0', prop: 'glitch', night: 1,
               d: '모든 날씨가 한꺼번에 열려요. 모든 한정 오라 + 오류 오라 출현.' },
-  void:     { n: '공허 균열', en: 'VOID RIFT', c: '#8a5cff', w: 1,   dur: [90, 150],  mat: 'voiddust', sky: ['#000000', '#090316', '#1b0b3a'], ground: '#000000', night: 1,
+  void:     { n: '공허 균열', en: 'VOID RIFT', c: '#8a5cff', w: 1,   dur: [90, 150],  mat: 'voiddust', sky: ['#02000a', '#16062e', '#40207a'], ground: '#0a0418', grass: '#8a5cff', prop: 'void', night: 1,
               d: '공허의 문이 열린 자만 볼 수 있는 하늘. 공허 오라 출현.' },
 };
 
@@ -309,3 +309,22 @@ function masteryList(S) {
   out.forEach(m => m.done = m.have >= m.all);
   return out;
 }
+
+
+/* ════════ 성장 · 보상 ════════ */
+const xpNeed = lv => Math.round(25 + lv * 18 + lv * lv * 1.2);
+const XP_TIER = [1, 3, 8, 18, 35, 60, 100, 160, 250];
+function lvReward(lv) {
+  const r = { coin: 40 + lv * 30 };
+  if (lv % 3 === 0) r.pots = { lucky: 1 };
+  if (lv % 5 === 0) r.pots = Object.assign(r.pots || {}, { fortune: 1, dice: 2 });
+  if (lv % 10 === 0) r.pots = Object.assign(r.pots || {}, { starlit: 1 });
+  if (lv % 25 === 0) r.pots = Object.assign(r.pots || {}, { voidelixir: 1 });
+  return r;
+}
+const DESTINY_MAX = 100;
+const CHEST = {
+  wood:   { n: '나무 상자', c: '#c88a4a', c2: '#7a4a1a', glow: '#ffcf8a', w: 75 },
+  silver: { n: '은 상자',   c: '#d8e4f0', c2: '#6a7a9a', glow: '#bfe4ff', w: 21 },
+  gold:   { n: '황금 상자', c: '#ffd36a', c2: '#a8661a', glow: '#fff0a8', w: 4 },
+};
