@@ -17,11 +17,14 @@
 <canvas id="scene"></canvas>
 
 <header id="top">
-  <div class="biome" id="biomeChip"><i></i><b id="biomeName">평온</b><span id="biomeTime">0:00</span></div>
+  <div class="lcol">
+    <div class="biome" id="biomeChip"><i></i><b id="biomeName">평온</b><span id="biomeTime">0:00</span></div>
+    <div class="row2"><div class="daychip" id="dayChip">☀</div><button class="merbtn hide" id="merBtn"><span>3:00</span></button></div>
+  </div>
   <div class="stats">
-    <div><small>행운</small><b id="luckVal">×1.00</b></div>
+    <button id="luckBox"><small>행운 ⓘ</small><b id="luckVal">×1.00</b></button>
     <div><small>속도</small><b id="spdVal">×1.00</b></div>
-    <div><small>굴림</small><b id="rollVal">0</b></div>
+    <div><small>주화</small><b><i id="coinIco"></i><span id="coinVal">0</span></b></div>
   </div>
 </header>
 <div id="buffs"></div>
@@ -31,6 +34,7 @@
   <div id="rName">VOIDROLL</div>
   <div id="rEn">R E N E W A L</div>
   <div id="rMeta"></div>
+  <div id="recent"></div>
 </div>
 <div id="floats"></div>
 

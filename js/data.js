@@ -29,6 +29,8 @@ const BIOMES = {
               d: '별 오라 확률 크게 증가. 유성·별의 왕관 출현.' },
   hell:     { n: '지옥',      en: 'HELL',      c: '#ff4a2a', w: 6,   dur: [70, 120],  mat: 'ember',    sky: ['#160103', '#440907', '#9a2810'], ground: '#1e0303',
               d: '불·피 오라 확률 증가. 지옥불·악마군주 출현.' },
+  sakura:   { n: '벚꽃비',    en: 'BLOSSOM',   c: '#ff9ac8', w: 9,   dur: [80, 130],  mat: 'blossom',  sky: ['#1a0c22', '#4a2448', '#c8789a'], ground: '#2a1028',
+              d: '꽃잎 오라 확률 증가. 꽃놀이·봄의 여왕 출현.' },
   glitch:   { n: '글리치',    en: 'GLITCHED',  c: '#ff2a6d', w: 1.5, dur: [60, 100],  mat: 'byte',     sky: ['#04040a', '#170926', '#08272a'], ground: '#000000', night: 1,
               d: '모든 날씨가 한꺼번에 열려요. 모든 한정 오라 + 오류 오라 출현.' },
   void:     { n: '공허 균열', en: 'VOID RIFT', c: '#8a5cff', w: 1,   dur: [90, 150],  mat: 'voiddust', sky: ['#000000', '#090316', '#1b0b3a'], ground: '#000000', night: 1,
@@ -120,6 +122,7 @@ const MATS = {
   starfrag: { n: '별 조각',     c: '#ffe9a8', ic: 'star' },
   ember:    { n: '지옥 불씨',   c: '#ff6a2a', ic: 'flame' },
   byte:     { n: '오류 바이트', c: '#ff2a6d', ic: 'byte' },
+  blossom:  { n: '벚꽃잎',      c: '#ffb0d4', ic: 'petal' },
   voiddust: { n: '공허 가루',   c: '#9a6cff', ic: 'void' },
 };
 
@@ -176,3 +179,133 @@ const NPCS = {
   keeper: { n: '공허지기',   role: '문지기',   lines: ['…바쳐라. 공허는 빛을 먹고 자란다.', '균열을 열겠는가. 그 너머엔 이름 없는 오라들이 있다.', '…너는 이미 많이 굴렸다. 더 깊이 굴려라.'],
             locked: ['…아직이다. 스무 개의 빛을 모아 와라.', '문은 기억하는 자에게만 열린다.'] },
 };
+
+
+/* ════════ 확장 콘텐츠 ════════ */
+AURAS.push(
+  // 기본 풀 추가
+  { id: 'glimmer',  n: '반짝이',   en: 'Glimmer',  r: 12,    c: '#e8e0ff', c2: '#9a8aff', fx: 'star',     d: '눈을 감아도 잔상처럼 남는 작은 반짝임.' },
+  { id: 'moss',     n: '이끼',     en: 'Moss',     r: 28,    c: '#9ad86a', c2: '#3a6a2a', fx: 'leaf',     boost: { b: 'rainy', x: 2 }, d: '오래 머문 자리에만 자라나는 초록.' },
+  { id: 'bubble',   n: '거품',     en: 'Bubble',   r: 52,    c: '#bff0ff', c2: '#6ab8ff', fx: 'bubble',   boost: { b: 'rainy', x: 3 }, d: '톡 터지기 직전이 가장 아름답다.' },
+  { id: 'ash',      n: '잿더미',   en: 'Ash',      r: 95,    c: '#a8a0a8', c2: '#3a3438', fx: 'ash',      boost: { b: 'hell', x: 3 }, d: '모든 것이 타고 남은 고요.' },
+  { id: 'amethyst', n: '자수정',   en: 'Amethyst', r: 260,   c: '#c08aff', c2: '#4a1a8a', fx: 'crystal',  d: '취하지 않는 지혜의 보랏빛.' },
+  { id: 'topaz',    n: '토파즈',   en: 'Topaz',    r: 380,   c: '#ffc85a', c2: '#a0601a', fx: 'crystal',  boost: { b: 'sand', x: 2 }, d: '태양을 한 조각 떼어낸 듯한 돌.' },
+  { id: 'echo',     n: '메아리',   en: 'Echo',     r: 700,   c: '#9ae8ff', c2: '#4a8ac8', fx: 'ripple',   d: '네가 굴린 소리가 아직 울리고 있다.' },
+  { id: 'phoenix',  n: '불사조',   en: 'Phoenix',  r: 2800,  c: '#ff8a2a', c2: '#ffe04a', fx: 'phoenix',  boost: { b: 'hell', x: 2 }, d: '재 속에서 다시 날아오르는 날개.' },
+  { id: 'tidal',    n: '조수',     en: 'Tidal',    r: 3800,  c: '#3ad0ff', c2: '#0a4a8a', fx: 'water',    boost: { b: 'rainy', x: 2 }, d: '달이 당기고 바다가 따른다.' },
+  { id: 'venom',    n: '맹독',     en: 'Venom',    r: 5200,  c: '#9aff3a', c2: '#2a5a0a', fx: 'venom',    d: '한 방울이면 충분하다.' },
+  { id: 'sakurastorm', n: '벚꽃폭풍', en: 'Sakura Storm', r: 9000, c: '#ffb0d4', c2: '#ff5a9a', fx: 'bloom', boost: { b: 'sakura', x: 4 }, d: '봄이 한꺼번에 쏟아진다.' },
+  { id: 'runic',    n: '고대 룬',  en: 'Runic',    r: 15000, c: '#7af0ff', c2: '#2a6aa0', fx: 'rune',     d: '아무도 읽지 못하는 문자가 빛난다.' },
+  { id: 'kitsune',  n: '구미호',   en: 'Kitsune',  r: 22000, c: '#6ad8ff', c2: '#ff8ad8', fx: 'foxfire',  d: '아홉 개의 여우불이 길을 밝힌다.' },
+  { id: 'bloodmoon',n: '핏빛 달',  en: 'Blood Moon', r: 60000, c: '#ff3a3a', c2: '#3a0008', fx: 'lunar', boost: { b: 'hell', x: 2 }, d: '이 달이 뜨면 아무도 잠들지 않는다.' },
+  { id: 'quasar',   n: '퀘이사',   en: 'Quasar',   r: 140000, c: '#8ad8ff', c2: '#ff8a3a', fx: 'quasar', boost: { b: 'starfall', x: 3 }, d: '우주에서 가장 밝은 심장.' },
+  { id: 'yggdrasil',n: '세계수',   en: 'Yggdrasil', r: 320000, c: '#8aff9a', c2: '#ffe08a', fx: 'tree',  d: '아홉 세계를 잇는 나무의 뿌리.' },
+  { id: 'oblivion', n: '망각',     en: 'Oblivion', r: 800000, c: '#8a8aa8', c2: '#06040c', fx: 'abyss',   boost: { b: 'void', x: 3 }, d: '기억하는 사람이 없으면 존재하지 않는다.' },
+  { id: 'requiem',  n: '진혼곡',   en: 'Requiem',  r: 2.8e6, c: '#d8c8ff', c2: '#4a2a8a', fx: 'notes',    d: '떠난 모든 것을 위한 노래.' },
+  { id: 'celestia', n: '천계',     en: 'Celestia', r: 9e6,   c: '#bfe8ff', c2: '#fff6c8', fx: 'angel',    d: '구름 너머, 문이 열린다.' },
+  { id: 'nova',     n: '초신성',   en: 'Supernova', r: 1.8e7, c: '#ffe8a8', c2: '#ff4a8a', fx: 'nova',    boost: { b: 'starfall', x: 2 }, d: '별이 죽는 순간, 우주에서 가장 밝다.' },
+  { id: 'paradox',  n: '패러독스', en: 'Paradox',  r: 4e7,   c: '#7affd8', c2: '#ff5ad8', fx: 'glitch',   d: '이 오라는 굴리기 전에 이미 나왔다.' },
+  { id: 'omega',    n: '오메가',   en: 'Omega',    r: 3e8,   c: '#fff6e0', c2: '#8a5cff', fx: 'cosmic',   d: '마지막 글자. 마지막 오라. 아마도.' },
+  // 낮/밤 한정
+  { id: 'sunbeam',  n: '햇살',     en: 'Sunbeam',  r: 350,   day: 1,   c: '#ffe08a', c2: '#ffb03a', fx: 'solar',   d: '낮에만 내려오는 따스한 손길.' },
+  { id: 'zenith',   n: '정오',     en: 'Zenith',   r: 250000, day: 1,  c: '#fff4c8', c2: '#ffb43a', fx: 'solar',   d: '그림자가 사라지는 단 한 순간.' },
+  { id: 'nocturne', n: '야상곡',   en: 'Nocturne', r: 1100,  night: 1, c: '#8a9aff', c2: '#2a2a6a', fx: 'notes',   d: '밤에만 들리는 조용한 선율.' },
+  { id: 'dreamer',  n: '꿈결',     en: 'Dreamer',  r: 14000, night: 1, c: '#d8a8ff', c2: '#6ac8ff', fx: 'cosmic',  d: '잠든 자의 꿈이 새어 나온다.' },
+  { id: 'moonqueen',n: '달의 여왕', en: 'Moon Queen', r: 700000, night: 1, c: '#e8f0ff', c2: '#8a9aff', fx: 'lunar', d: '밤하늘의 주인이 고개를 숙인다.' },
+  // 벚꽃비 한정
+  { id: 'hanami',   n: '꽃놀이',   en: 'Hanami',   r: 2000,  biome: 'sakura', c: '#ffc8e0', c2: '#ff7ab0', fx: 'bloom', d: '꽃잎 아래에서 잠시 쉬어 간다.' },
+  { id: 'springqueen', n: '봄의 여왕', en: 'Spring Queen', r: 450000, biome: 'sakura', c: '#ffd8ec', c2: '#8aff9a', fx: 'tree', d: '그녀가 웃으면 겨울이 끝난다.' },
+  // 융합 전용 (굴림으로는 안 나옴)
+  { id: 'stormfire',  n: '폭풍염',    en: 'Stormfire',  r: 5000,   fusion: 1, c: '#ff6a3a', c2: '#6ab8ff', fx: 'storm',    d: '번개를 먹고 자란 불길.' },
+  { id: 'frostfire',  n: '빙염',      en: 'Frostfire',  r: 8000,   fusion: 1, c: '#7af0ff', c2: '#ff7a3a', fx: 'flame',    d: '얼어붙은 채로 타오르는 불.' },
+  { id: 'prismheart', n: '프리즘 심장', en: 'Prismheart', r: 30000, fusion: 1, c: '#ff8af0', c2: '#8afff0', fx: 'prism',   d: '세 보석의 빛이 하나로 뛴다.' },
+  { id: 'twilight',   n: '황혼',      en: 'Twilight',   r: 60000,  fusion: 1, c: '#ffa06a', c2: '#6a5aff', fx: 'eclipse',  d: '낮과 밤이 손을 맞잡는 시간.' },
+  { id: 'starforge',  n: '별의 용광로', en: 'Starforge', r: 200000, fusion: 1, c: '#ffb04a', c2: '#a06aff', fx: 'nova',    d: '별을 두드려 만든 오라.' },
+  { id: 'voidseraph', n: '공허 세라프', en: 'Void Seraph', r: 2e6, fusion: 1, c: '#a07aff', c2: '#0a0418', fx: 'angel',   d: '빛을 잃고도 날개를 접지 않은 천사.' },
+  { id: 'chronoverse',n: '시공',      en: 'Chronoverse', r: 2e7,   fusion: 1, c: '#fff0b0', c2: '#7a5aff', fx: 'chrono',   d: '모든 순간이 동시에 존재한다.' },
+  { id: 'worldend',   n: '세계의 끝', en: 'World\'s End', r: 2e9, fusion: 1, c: '#ffffff', c2: '#ff2a6a', fx: 'voidroll', d: '시작과 끝과 무한이 하나로 접힌 곳.' },
+);
+
+/* 융합 레시피: 재료 오라는 소모, 장착 중 1개는 보호 */
+const FUSIONS = [
+  { out: 'stormfire',   cost: { '@blaze': 2, '@thunder': 1, '@gale': 1, coin: 300 } },
+  { out: 'frostfire',   cost: { '@blaze': 2, '@glacier': 1, frost: 5, coin: 400 } },
+  { out: 'prismheart',  cost: { '@ruby': 3, '@sapphire': 3, '@emerald': 3, '@prism': 1, coin: 800 } },
+  { out: 'twilight',    cost: { '@solaris': 1, '@moonlight': 2, '@eclipse': 1, coin: 1500 } },
+  { out: 'starforge',   cost: { '@nebula': 1, '@twinkle': 5, '@hellfire': 1, starfrag: 10, coin: 3000 } },
+  { out: 'voidseraph',  cost: { '@seraph': 1, '@abyssal': 1, '@hollow': 1, voiddust: 30, coin: 8000 } },
+  { out: 'chronoverse', cost: { '@hourglass': 2, '@eternity': 1, coin: 20000 } },
+  { out: 'worldend',    cost: { '@apocalypse': 1, '@genesis': 1, '@infinity': 1, voiddust: 100, coin: 99999 } },
+];
+
+/* 부적: 2칸 장착 */
+const CHARMS = {
+  clover:   { n: '네잎 클로버', c: '#7be08a', ic: 'clover', d: '행운 +10%',                   luck: .1,             cost: { glim: 20, '@sprout': 10 } },
+  shell:    { n: '소라 부적',   c: '#7cc8ff', ic: 'shell',  d: '호우 날씨에서 행운 ×1.5',     bm: { b: 'rainy', x: 1.5 },  cost: { pearl: 12, '@droplet': 5 } },
+  globe:    { n: '스노볼',      c: '#d8f0ff', ic: 'globe',  d: '설원 날씨에서 행운 ×1.5',     bm: { b: 'snowy', x: 1.5 },  cost: { frost: 12, '@rime': 5 } },
+  pinwheel: { n: '바람개비',    c: '#9ff0e0', ic: 'pin',    d: '질풍 행운 ×1.5 · 속도 +10%',  bm: { b: 'windy', x: 1.5 }, speed: .1, cost: { feather: 12, '@breeze': 6 } },
+  sandglass:{ n: '모래 시계',   c: '#ffcf6a', ic: 'sandglass', d: '굴림 속도 +20%',          speed: .2,            cost: { sunglass: 10, '@dust': 10 } },
+  moonstone:{ n: '월장석',      c: '#dfe6ff', ic: 'moon',   d: '밤에 행운 ×1.6',              night: 1.6,           cost: { starfrag: 8, '@moonlight': 1 } },
+  sakura:   { n: '벚꽃 머리핀', c: '#ffb0d4', ic: 'petal',  d: '벚꽃비 행운 ×1.5 · 빛나는 확률 2배', bm: { b: 'sakura', x: 1.5 }, shiny: 2, cost: { blossom: 12, '@petal': 4 } },
+  magnet:   { n: '재료 자석',   c: '#ff8a9a', ic: 'magnet', d: '재료 획득 확률 ×2',           mat: 2,               cost: { glim: 30, byte: 3 } },
+  hellhorn: { n: '악마의 뿔',   c: '#ff5a2a', ic: 'horn',   d: '지옥 행운 ×1.6 · 주화 +50%',  bm: { b: 'hell', x: 1.6 }, coin: .5, cost: { ember: 15, '@cinder': 8 } },
+  voideye:  { n: '공허의 눈',   c: '#9a6cff', ic: 'eye',    d: '배수 보너스가 8번마다',       every: 8,             cost: { voiddust: 25, '@hollow': 1 } },
+};
+
+/* 떠돌이 상인 */
+const SHOP_POOL = [
+  { k: 'pot', id: 'lucky', n: 1, p: 120 }, { k: 'pot', id: 'swift', n: 1, p: 100 }, { k: 'pot', id: 'fortune', n: 1, p: 450 },
+  { k: 'pot', id: 'haste', n: 1, p: 380 }, { k: 'pot', id: 'starlit', n: 1, p: 1600 }, { k: 'pot', id: 'compass', n: 1, p: 500 },
+  { k: 'pot', id: 'glitchkey', n: 1, p: 2400 }, { k: 'pot', id: 'dice', n: 1, p: 260 }, { k: 'pot', id: 'voidelixir', n: 1, p: 9000 },
+  { k: 'mat', id: 'glim', n: 10, p: 90 }, { k: 'mat', id: 'feather', n: 5, p: 140 }, { k: 'mat', id: 'pearl', n: 5, p: 140 },
+  { k: 'mat', id: 'frost', n: 5, p: 140 }, { k: 'mat', id: 'sunglass', n: 5, p: 160 }, { k: 'mat', id: 'starfrag', n: 3, p: 260 },
+  { k: 'mat', id: 'ember', n: 4, p: 280 }, { k: 'mat', id: 'blossom', n: 4, p: 220 }, { k: 'mat', id: 'byte', n: 2, p: 600 }, { k: 'mat', id: 'voiddust', n: 5, p: 900 },
+];
+POTIONS.dice = { n: '행운 주사위', c: '#ffffff', d: '다음 1회 굴림 행운 ×25', eff: { next: 25 }, cost: { coin: 200 } };
+POTIONS.shinydust = { n: '빛나는 가루', c: '#ffe9ff', d: '3분간 빛나는 확률 ×3', eff: { shiny: 3, t: 180 }, cost: { blossom: 4, starfrag: 2, glim: 10 } };
+
+/* 출석 보상 (7일 주기) */
+const DAILY = [
+  { coin: 100, pots: { lucky: 1 } }, { coin: 150, pots: { swift: 2 } }, { coin: 200, mats: { glim: 15 } },
+  { coin: 300, pots: { fortune: 1 } }, { coin: 400, pots: { compass: 1 } }, { coin: 500, pots: { dice: 3 } },
+  { coin: 1000, pots: { starlit: 1, shinydust: 1 } },
+];
+
+/* 낮/밤: 12분 주기, 마지막 4분 48초가 밤 */
+const DAY_CYCLE = 720;
+function dayPhase() { return (Date.now() / 1000 % DAY_CYCLE) / DAY_CYCLE; }
+function isNight() { return dayPhase() >= .6; }
+function dayLeft() { const p = dayPhase(); return (p < .6 ? .6 - p : 1 - p) * DAY_CYCLE; }
+
+QUESTS.push(
+  { id: 'r50k',  n: '공허를 굴리는 자', d: '50,000번 굴리기', goal: S => [S.rolls, 50000], rw: { pots: { voidelixir: 3 }, coin: 20000 } },
+  { id: 'sh1',   n: '반짝이는 것',   d: '빛나는 오라 1개 획득', goal: S => [Object.keys(S.shiny).length, 1], rw: { coin: 500, pots: { shinydust: 1 } } },
+  { id: 'sh10',  n: '빛의 수집가',   d: '빛나는 오라 10종',     goal: S => [Object.keys(S.shiny).length, 10], rw: { coin: 3000, pots: { starlit: 2 } } },
+  { id: 'f1',    n: '첫 융합',       d: '융합 오라 1종 만들기', goal: S => [AURAS.filter(a => a.fusion && S.found[a.id]).length, 1], rw: { coin: 800, pots: { fortune: 2 } } },
+  { id: 'f4',    n: '연금의 정점',   d: '융합 오라 4종',        goal: S => [AURAS.filter(a => a.fusion && S.found[a.id]).length, 4], rw: { pots: { voidelixir: 2 } } },
+  { id: 'ch2',   n: '부적 두 개',    d: '부적 2개 제작',        goal: S => [Object.keys(S.charms).length, 2], rw: { coin: 600 } },
+  { id: 'ev5',   n: '별똥별 사냥꾼', d: '별똥별 5번 잡기',      goal: S => [S.stats.stars, 5], rw: { coin: 400, pots: { dice: 2 } } },
+  { id: 'nt1',   n: '밤의 손님',     d: '밤 한정 오라 획득',    goal: S => [AURAS.filter(a => a.night && S.found[a.id]).length, 1], rw: { coin: 600, pots: { starlit: 1 } } },
+  { id: 'mer3',  n: '단골손님',      d: '상인에게 3번 구매',    goal: S => [S.stats.buys, 3], rw: { coin: 300 } },
+  { id: 'c75',   n: '살아있는 백과', d: '오라 75종 발견',       goal: S => [found(S), 75], rw: { pots: { voidelixir: 4 }, coin: 10000 } },
+  { id: 't7',    n: '영광',          d: '글로리어스 등급 획득', goal: S => [bestTier(S) >= 7 ? 1 : 0, 1], rw: { pots: { voidelixir: 5 }, coin: 30000 } },
+  { id: 'm1',    n: '첫 통달',       d: '등급 또는 날씨 하나 완성 (마스터리)', goal: S => [masteryList(S).filter(m => m.done).length, 1], rw: { coin: 1000 } },
+);
+
+NPCS.jorr = { n: '조르', role: '떠돌이 상인', lines: ['어서 오게! 이번엔 오래 못 있어. 골라, 골라!', '주화만 있으면 뭐든 팔지. 영혼은 빼고. 아마도.', '다음엔 어디로 갈지 나도 몰라. 바람이 정하지.'] };
+NPCS.lumen = { n: '루멘', role: '융합의 정령', lines: ['둘이 하나가 되면, 하나는 더 이상 혼자가 아니야.', '굴려서는 절대 나오지 않는 오라들이 있어. 여기서만.', '재료가 된 오라들은 사라지지 않아. 새 빛 안에 남지.'] };
+
+/* 마스터리: 등급(날씨 한정·융합·낮밤 제외) 또는 날씨 한정을 모두 모으면 영구 행운 +5% */
+function masteryList(S) {
+  const out = [];
+  for (let t = 0; t < TIERS.length; t++) {
+    const l = AURAS.filter(a => !a.biome && !a.fusion && !a.day && !a.night && tierOf(a.r) === t);
+    if (l.length) out.push({ k: 't' + t, n: TIERS[t].n, c: TIERS[t].c, have: l.filter(a => S.found[a.id]).length, all: l.length });
+  }
+  for (const b in BIOMES) {
+    const l = AURAS.filter(a => a.biome === b); if (!l.length) continue;
+    out.push({ k: 'b' + b, n: BIOMES[b].n + ' 한정', c: BIOMES[b].c, have: l.filter(a => S.found[a.id]).length, all: l.length });
+  }
+  out.forEach(m => m.done = m.have >= m.all);
+  return out;
+}
